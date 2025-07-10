@@ -106,7 +106,7 @@ Der Penetrationstest umfasste mehrere Schlüsselphasen:
 
 Eine detaillierte Schritt-für-Schritt-Anleitung, inklusive Befehlsausgaben, Analyse, Bewertung und Empfehlungen für jeden Schritt, finden Sie im vollständigen HTML-Bericht:
 
-[**➡️ Vollständigen Pentest-Bericht hier ansehen**]({Link zur Seite})
+[**➡️ Vollständigen Pentest-Bericht hier ansehen**]({[Link zur Seite](https://alientec1908.github.io/Influencer_HackMyVM_Medium)})
 
 ---
 
